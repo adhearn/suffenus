@@ -8,6 +8,7 @@ List *List_new(freeFunction freeFunction) {
     ls->head = NULL;
     ls->tail = NULL;
     ls->freeFunction = freeFunction;
+    ls->size = 0;
     return ls;
 }
 
@@ -24,6 +25,8 @@ void List_append(List *list, void *data) {
         list->tail->next = new;
         list->tail = new;
     }
+
+    list->size += 1;
 }
 
 void List_prepend(List *list, void *data) {
@@ -39,6 +42,8 @@ void List_prepend(List *list, void *data) {
         new->next = list->head;
         list->head = new;
     }
+
+    list->size += 1;
 }
 
 void *List_head(List *list) {
@@ -61,6 +66,8 @@ void *List_pop(List *list) {
         list->head = list->head->next;
         return data;
     }
+
+    list->size -= 1;
 }
 
 void List_free(List *list) {
@@ -74,4 +81,12 @@ void List_free(List *list) {
         n = next;
     }
     free(list);
+}
+
+int List_size(List *list) {
+    return list->size;
+}
+
+int List_empty(List *list) {
+    return list->head == NULL && list->tail == NULL;
 }

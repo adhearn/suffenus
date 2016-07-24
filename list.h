@@ -16,6 +16,7 @@ typedef struct List{
     _Node *head;
     _Node *tail;
     freeFunction freeFunction;
+    int size;
 } List;
 
 void List_append(List *list, void *data);
@@ -25,5 +26,7 @@ void *List_tail(List *list);
 void *List_pop(List *list);
 void List_free(List *list);
 List *List_new(freeFunction freeFunction);
+int List_size(List *list);
+int List_empty(List *list);
 
 #endif
