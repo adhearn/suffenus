@@ -7,7 +7,7 @@ else
 LIBS += -lfl
 endif
 
-SRC_FILES=list.c compiler.c tac.c
+SRC_FILES=list.c compiler.c tac.c bb.c
 INC_DIRS=-I.
 
 LEXER_GEN_SRC=parser.l

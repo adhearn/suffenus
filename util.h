@@ -1,6 +1,4 @@
-/* A few utility functions. Debug/error handling macros are adapted from
- * LCTHW.
- */
+// A few utility functions. Debug/error handling macros are adapted from LCTHW.
 #ifndef _util_h
 #define _util_h
 

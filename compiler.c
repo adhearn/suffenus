@@ -1,20 +1,20 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include "bb.h"
 #include "tac.h"
 #include "list.h"
 #include "parser.tab.h"
+#include "util.h"
 
 void emit_asm_header() {
     printf(".text\n");
     printf(".globl main\n");
     printf("main:\n");
-    printf("pushq %%rbp\n");
-    printf("movq %%rsp, %%rbp\n");
 }
 
 void emit_asm_footer() {
-    printf("popq %%rbp\n");
-    printf("ret\n");
+    printf("movq $60, %%rax\n");
+    printf("syscall\n");
 }
 
 void print_Address(struct Address *addr) {
@@ -27,7 +27,7 @@ void print_Address(struct Address *addr) {
         printf("$%d", addr->val.constant->val);
         break;
     default:
-        printf("ERROR: Invalid address type: %d\n", addr->type);
+        log_err("Invalid address type: %d\n", addr->type);
     }
 }
 
@@ -35,9 +35,7 @@ void emit_binop(struct Quad *stat) {
     switch (stat->op) {
     case Op_mul: // Different case, since it assumes that one of its operands is in RAX already
         printf("imul ");
-        print_Address(stat->arg1);
-        printf("\n");
-        return; // Not a break
+        break;
     case Op_add:
         printf("addq ");
         break;
@@ -45,12 +43,13 @@ void emit_binop(struct Quad *stat) {
         printf("subq ");
         break;
     default:
-        printf("ERROR: handling non-binop in emit_binop: %d\n", stat->op);
+        log_err("Handling non-binop in emit_binop: %d\n", stat->op);
     }
 
     print_Address(stat->arg2);
     printf(", ");
     print_Address(stat->arg1);
+    printf("\n");
 }
 
 void print_jump_instruction(enum Op op) {
@@ -62,17 +61,19 @@ void print_jump_instruction(enum Op op) {
         printf("jne");
         break;
     case Op_gt:
-        printf("gt");
+        printf("jg");
         break;
     case Op_gte:
-        printf("gte");
+        printf("jge");
         break;
     case Op_lt:
-        printf("lt");
+        printf("jl");
         break;
     case Op_lte:
-        printf("lte");
+        printf("jle");
         break;
+    default:
+        log_err("Invalid operand %d", op);
     }
 }
 
@@ -87,6 +88,10 @@ void emit_conditional(struct Quad *stat) {
 }
 
 void emit_Statement(struct Quad *stat) {
+    if (stat->label != NULL) {
+        printf("%s: ", stat->label->id);
+    }
+
     switch (stat->op) {
     case Op_null:
         printf("movq ");
@@ -112,8 +117,17 @@ void emit_Statement(struct Quad *stat) {
         emit_conditional(stat);
         break;
     default:
-        printf("ERROR: unable to handle op %d\n", stat->op);
+        log_err("unable to handle op %d\n", stat->op);
     }
+}
+
+void emit_Block(struct BasicBlock *block) {
+    struct InstructionNode *node = block->head;
+    while (node != block->tail) {
+        emit_Statement(node->instruction);
+        node = node->next;
+    }
+    emit_Statement(node->instruction);
 }
 
 void emit_Program(struct Program *prog) {
@@ -123,8 +137,8 @@ void emit_Program(struct Program *prog) {
     List *statements = prog->statements;
 
     while (!List_empty(statements)) {
-        struct Quad *quad = (struct Quad *)List_pop(statements);
-        emit_Statement(quad);
+        struct BasicBlock *block = (struct BasicBlock *)List_pop(statements);
+        emit_Block(block);
     }
 
     // emit rest of file
@@ -138,10 +152,11 @@ int main(int argc, char *argv[]) {
     int res = yyparse(&prog);
 
     if (res != 0) {
-        fprintf(stderr, "Error while parsing\n");
+        log_err("Error while parsing\n");
         return 1;
     } else {
-        printf("Parsed %d statements\n", List_size(prog->statements));
+        List *blocks = buildBasicBlocks(prog);
+        prog->statements = blocks;
         emit_Program(prog);
     }
 

@@ -70,5 +70,7 @@ struct Address *make_Address_Identifier(struct Identifier *id);
 struct Address *make_Address_Constant(struct Constant *id);
 struct Program *make_Program(List *list);
 void free_Program(struct Program *prog);
+void tac_print_Quad(struct Quad *quad);
+void tac_print_Address(struct Address *addr);
 
 #endif

@@ -60,14 +60,14 @@ void *List_pop(List *list) {
     } else if (list->head->next == NULL) { // List of size 1
         void *data = list->head->data;
         list->head = list->tail = NULL;
+        list->size -= 1;
         return data;
     } else {
         void *data = list->head->data;
         list->head = list->head->next;
+        list->size -= 1;
         return data;
     }
-
-    list->size -= 1;
 }
 
 void List_free(List *list) {

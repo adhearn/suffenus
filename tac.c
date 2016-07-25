@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include "tac.h"
 #include "util.h"
@@ -61,4 +62,31 @@ struct Address *make_Address_Constant(struct Constant *constant) {
 
 void free_Program(struct Program *prog) {
     // free
+}
+
+void tac_print_Address(struct Address *addr) {
+    if (addr != NULL) {
+        switch (addr->type) {
+        case Address_name:
+            printf("%s", addr->val.name->id);
+            break;
+        case Address_constant:
+            printf("%d", addr->val.constant->val);
+            break;
+        case Address_gensym:
+            printf("<gensym>");
+            break;
+        }
+    } else {
+        printf("NULL");
+    }
+}
+
+void tac_print_Quad(struct Quad *quad) {
+    printf("Op: %d\n", quad->op);
+    printf("arg1: ");
+    tac_print_Address(quad->arg1);
+    printf("\narg2: ");
+    tac_print_Address(quad->arg2);
+    printf("\n");
 }
