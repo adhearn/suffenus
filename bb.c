@@ -47,7 +47,7 @@ List *buildBasicBlocks(struct Program *prog) {
             endOfBlock = 1;
         }
 
-        BasicBlock_appendInstruction(curBlock, quad);
+        BasicBlock_append_Quad(curBlock, quad);
     }
 
     return blocks;
@@ -63,7 +63,7 @@ struct BasicBlock *BasicBlock_new() {
     return block;
 }
 
-void BasicBlock_appendInstruction(struct BasicBlock *block, struct Quad *instruction) {
+void BasicBlock_appendInstruction(struct BasicBlock *block, union Instruction instruction) {
     struct InstructionNode *node = malloc(sizeof(struct InstructionNode));
     node->instruction = instruction;
     node->next = NULL;
@@ -72,11 +72,19 @@ void BasicBlock_appendInstruction(struct BasicBlock *block, struct Quad *instruc
     if (block->head == NULL) {
         block->head = node;
         block->tail = node;
-    }
-
-    if (block->tail != NULL) {
+    } else if (block->tail != NULL) {
         block->tail->next = node;
     }
 
     block->tail = node;
+}
+
+void BasicBlock_append_Quad(struct BasicBlock *block, struct Quad *quad) {
+    union Instruction instruction = { quad: quad };
+    BasicBlock_appendInstruction(block, instruction);
+}
+
+void BasicBlock_append_x64_instruction(struct BasicBlock *block, struct x64_instruction *x64) {
+    union Instruction instruction = { x64: x64 };
+    BasicBlock_appendInstruction(block, instruction);
 }

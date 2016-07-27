@@ -20,6 +20,10 @@ struct Gensym {
     int val;
 };
 
+struct Label {
+    char *label;
+};
+
 enum Op {
     Op_null,
     Op_or,
@@ -42,6 +46,7 @@ enum Op {
 
 enum Address_type {
     Address_name,
+    Address_label,
     Address_constant,
     Address_gensym
 };
@@ -49,6 +54,7 @@ enum Address_type {
 struct Address {
     enum Address_type type;
     union {
+        struct Label *label;
         struct Identifier *name;
         struct Constant *constant;
         struct Gensym *gensym;
@@ -59,15 +65,17 @@ struct Quad {
     enum Op op;
     struct Address *arg1;
     struct Address *arg2;
-    void *result;
-    struct Identifier *label;
+    struct Address *result;
+    struct Label *label;
 };
 
 struct Quad *make_Quad(void *result, enum Op op, struct Address *arg1, struct Address *arg2);
 struct Identifier *make_Identifier(char *id);
 struct Constant *make_Constant(int constant);
+struct Label *make_Label(char *label);
 struct Address *make_Address_Identifier(struct Identifier *id);
 struct Address *make_Address_Constant(struct Constant *id);
+struct Address *make_Address_Label(struct Label *label);
 struct Program *make_Program(List *list);
 void free_Program(struct Program *prog);
 void tac_print_Quad(struct Quad *quad);

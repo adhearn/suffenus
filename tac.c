@@ -20,11 +20,19 @@ struct Identifier *make_Identifier(char *id) {
 }
 
 struct Constant *make_Constant(int val) {
-    struct Constant *c = malloc(sizeof(struct Identifier));
+    struct Constant *c = malloc(sizeof(struct Constant));
     check_mem(c);
 
     c->val = val;
     return c;
+}
+
+struct Label *make_Label(char *label) {
+    struct Label *l = malloc(sizeof(struct Label));
+    check_mem(l);
+
+    l->label = label;
+    return l;
 }
 
 struct Quad *make_Quad(void *result, enum Op op, struct Address *arg1, struct Address *arg2) {
@@ -46,6 +54,16 @@ struct Address *make_Address_Identifier(struct Identifier *id) {
 
     addr->type = Address_name;
     addr->val.name = id;
+
+    return addr;
+}
+
+struct Address *make_Address_Label(struct Label *label) {
+    struct Address *addr = malloc(sizeof(struct Quad));
+    check_mem(addr);
+
+    addr->type = Address_label;
+    addr->val.label = label;
 
     return addr;
 }
@@ -76,6 +94,8 @@ void tac_print_Address(struct Address *addr) {
         case Address_gensym:
             printf("<gensym>");
             break;
+        case Address_label:
+            printf("%s:", addr->val.label->label);
         }
     } else {
         printf("NULL");

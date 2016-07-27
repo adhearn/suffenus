@@ -1,13 +1,14 @@
 import os.path
 import subprocess
 
-tests = [["return1", 1], ["one_plus_one", 2], ["three_times_four", 12], ["sum_ten", 55], ["fact5", 120]]
+tests = [["return1", 1], ["one_plus_one", 2], ["three_times_four", 12], ["sum_ten", 55], ["fact5", 120], ["jump1", 5]]
 testDir = "test"
 testExtension = ".tac"
 testAsm = "testAsm.s"
 testExec = "testExec"
 
 def run_test(filename, expected):
+    print('Running test: {}'.format(filename))
     full_name = os.path.join(testDir, filename)
     full_name = full_name + testExtension
 

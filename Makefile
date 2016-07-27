@@ -7,7 +7,7 @@ else
 LIBS += -lfl
 endif
 
-SRC_FILES=list.c compiler.c tac.c bb.c
+SRC_FILES=list.c compiler.c tac.c bb.c x64.c instruction_selection.c
 INC_DIRS=-I.
 
 LEXER_GEN_SRC=parser.l
@@ -24,5 +24,9 @@ compiler: $(SRC_FILES) $(LEXER_GEN_SRC) $(PARSER_GEN_SRC)
 
 clean:
 	rm -f $(PARSER)
+	rm -f $(LEXER)
 	rm -f parser.tab.*
 	rm -f parser.output
+	rm -f testExec
+	rm -f testAsm.s
+	rm -f compiler

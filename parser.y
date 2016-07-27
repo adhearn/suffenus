@@ -18,8 +18,8 @@ int yyerror();
     struct Quad *quad;
     struct Program *program;
     struct Address *addr;
-    struct Identifier *id;
     struct Constant *constant;
+    struct Label *label;
 }
 
 %parse-param {struct Program **prog}
@@ -42,8 +42,8 @@ int yyerror();
 %type   <program>       program
 %type   <addr>          address
 %type   <quad>          stat statement assignment assignment_rhs jump conditional_jump conditional
-%type   <id>            label
 %type   <str>           ID
+%type   <label>         label
 /* %type   <primary>       primary_exp */
 /* %type   <unary>         unary_exp */
 
@@ -91,13 +91,16 @@ assignment_rhs: UNOP address { $$ = make_Quad(NULL, $1, $2, NULL); }
         |       address { $$ = make_Quad(NULL, Op_null, $1, NULL); }
         ;
 
-jump:           JUMP label { $$ = make_Quad($2, Op_jump, NULL, NULL); }
+jump:           JUMP label {
+                    struct Address *addrLabel = make_Address_Label($2);
+                    $$ = make_Quad(addrLabel, Op_jump, NULL, NULL); }
         ;
 
 conditional_jump:
                 IF conditional JUMP label {
                     struct Quad *quad = $2;
-                    quad->result = $4;
+                    struct Address *addrLabel = make_Address_Label($4);
+                    quad->result = addrLabel;
                     $$ = quad;
                 }
         ;
@@ -117,7 +120,10 @@ address:        INTEGER {
                 }
         ;
 
-label:          ID { $$ = make_Identifier($1); }
+label:          ID { struct Label *label = make_Label($1);
+                    $$ = label;
+                    //$$ = make_Address_Label(label);
+                }
         ;
 
 %%
