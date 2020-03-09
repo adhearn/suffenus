@@ -4,6 +4,7 @@
 #include "tac.h"
 #include "list.h"
 #include "parser.tab.h"
+#include <stdio.h>
 #define TRUE 1
 #define FALSE 0
 %}
