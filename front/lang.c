@@ -20,11 +20,23 @@ void print_Type(struct Type *type) {
     printf("%s", type->type);
 }
 
-struct Identifier *make_Identifier(char *id) {
+/**
+ * For now, we can be lazy with our function types, because functions don't yet
+ * support parameters! We can just add some empty parens at the end of the type
+ * string for now, but we'll have to support params later.
+ */
+void Type_make_fn_type(struct Type *type) {
+    char *old_type_str = type->type;
+    asprintf(&(type->type), "%s()", old_type_str);
+    return type;
+}
+
+struct Identifier *make_Identifier(char *id, struct Type *type) {
     struct Identifier *ident = malloc(sizeof(struct Identifier));
     check_mem(id);
 
     ident->id = id;
+    ident->type = type;
     return ident;
 }
 

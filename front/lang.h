@@ -107,6 +107,7 @@ struct Program {
 
 
 struct Type *make_Type(char *type);
+struct Type *Type_make_fn_type(struct Type *type);
 struct Identifier *make_Identifier(char *id);
 struct Constant *make_Constant(int constant);
 struct Declaration *make_Declaration(struct Type *type, struct Identifier *id);

@@ -1,4 +1,5 @@
 %{
+
 #include <stdio.h>
 #include <glib.h>
 #include "util.h"
@@ -10,6 +11,8 @@
 int yylex();
 int yyerror(struct Program **prog, const char *msg);
 extern int yylineno;
+struct SymbolTable *symbol_table;
+
 %}
 
 %define parse.error verbose
@@ -69,7 +72,11 @@ extern int yylineno;
 program:         declaration_list function_list {
     struct Program *full_program = make_Program($1, $2);
     *prog = full_program;
+    symbol_type = symbol_table_new(NULL);
  }
+
+                top_level_block: declaration {}
+        |
                 ;
 
 declaration_list:      declaration {
@@ -84,10 +91,10 @@ declaration_list:      declaration {
                 }
                 ;
 declaration:           type ID SEMI {
-
-    // st_declare_type(st, $2, $1);
-    struct Identifier *identifier = make_Identifier($2);
+    struct Identifier *identifier = make_Identifier($2, $1);
+    symbol_table_extend(symbol_table, identifier);
     struct Declaration *decl = make_Declaration($1, identifier);
+
     $$ = decl;
                 }
                 ;
@@ -104,7 +111,21 @@ function_list: function {
                 ;
 
 function:       type ID LPAREN RPAREN LBRACE declaration_list statement_list  RBRACE {
+    /*
+     * Once we have function params, we'll have to fix how we do symbol tables,
+     * since we'll need to add the function params to the symbol table for the
+     * function, not the block above. For now, though, we can wait to create the
+     * new symbol table until we process this production.
+     *
+     * NB: the function name itself will still belong in the outer scope!
+     */
+
     struct Identifier *identifier = make_Identifier($2);
+    Type_make_fn_type($1);
+    identifier->type = $1;
+    symbol_table_extend(symbol_table, identifier);
+
+    symbol_table = symbol_table_new(symbol_table);
     GList *params_list = NULL;
     struct Function *func = make_Function($1, identifier, params_list, $6, $7);
     $$ = func;

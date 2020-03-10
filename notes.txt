@@ -1,0 +1,17 @@
+Next Step:
+Need to add variables to the symbol table when they are declared. The bad news is that getting blocks right requires me to rewrite a bit of the parser. The good news is that how I was handling blocks was stupid anyway, and this is a good time to actually get it right. Here's the plan:
+
+1. Update the top-level program production. Instead of its production being a declarations_list followed by a functions_list, it will instead produce a top_level_block.
+
+2. top_level_block nonterminals will have 3 productions:
+   - top_level_block declaration
+   - top_level_block function
+   - empty? (need to think this through a bit more, we could also just have 4 productions, declaration on its own and function on its own. This is where more parser theory would help!)
+
+3. The function nonterminal will also change its production. Instead of the body of the function being a declaration_list followed by a statement_list, we will use a similar block structure as for top_level_block to allow interleaving declarations and statements.
+
+4. For both block types, we will create a new symbol table on any non-recursive block production. Because of our structure, that means that we will actually work our way from the bottom of blocks. That means that we'll use variables before they're declared, but that's ok! As long as we track the line number where declarations and usages happen, we can report errors (e.g. re-declaring variables) just fine when we come across it the second time while parsing our way up the block.
+
+5. Going backwards means it's a bit more complicated to report errors where we use undeclared variables. However, we can always just walk the tree and find any identifiers that don't have a type associated. As long as we track source location info, we can again report errors in a second pass. (The type checking pass actually would be a fine time to do that, since it will break our type checking algorithm anyway - kind of like with callbacks, any untyped expression will "pollute" upwards, and make it impossible to touch anything that touches it.)
+
+Note that as I have designed it so far, blocks don't track their symbol tables. If we have a block node, however, we easily could keep symbol tables around after the initial parse. Not sure if it will be required/convenient to do so, or if having the Identifiers around is sufficient.
