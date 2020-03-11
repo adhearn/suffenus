@@ -1,0 +1,181 @@
+bison -vd parser.y
+flex -o  lex.yy.c parser.l
+gcc `pkg-config --cflags glib-2.0` -I. -g -Wall -D_GNU_SOURCE=1 -std=c17 --ms-extensions lang.c front.c lex.yy.c parser.tab.c `pkg-config --libs glib-2.0` -o compiler
+In file included from lang.c:4:
+lang.h:48:20: error: field 'node_type' has incomplete type
+     enum node_type node_type;
+                    ^~~~~~~~~
+lang.c: In function 'make_Identifier':
+lang.c:36:7: error: request for member 'node_type' in something not a structure or union
+     id->node_type = NODE_TYPE_IDENTIFIER;
+       ^~
+lang.c: In function 'block_free':
+lang.c:261:61: error: 'free_block_elements' undeclared (first use in this function); did you mean 'free_Statement'?
+     g_list_free_full(block->block_elements, (GDestroyNotify)free_block_elements);
+                                                             ^~~~~~~~~~~~~~~~~~~
+                                                             free_Statement
+lang.c:261:61: note: each undeclared identifier is reported only once for each function it appears in
+lang.c: At top level:
+lang.c:296:17: error: conflicting types for 'make_Program'
+ struct Program *make_Program(GList *top_level_nodes) {
+                 ^~~~~~~~~~~~
+In file included from lang.c:4:
+lang.h:151:17: note: previous declaration of 'make_Program' was here
+ struct Program *make_Program(GList *declarations, GList *functions);
+                 ^~~~~~~~~~~~
+lang.c: In function 'make_Program':
+lang.c:301:9: error: 'struct Program' has no member named 'declarations_and_functions'
+     prog->declarations_and_functions = declarations_and_functions;
+         ^~
+lang.c:301:40: error: 'declarations_and_functions' undeclared (first use in this function)
+     prog->declarations_and_functions = declarations_and_functions;
+                                        ^~~~~~~~~~~~~~~~~~~~~~~~~~
+lang.c: In function 'symbol_table_new':
+lang.c:322:78: warning: passing argument 4 of 'g_hash_table_new_full' from incompatible pointer type [-Wincompatible-pointer-types]
+     GHashTable *table = g_hash_table_new_full(g_str_hash, g_str_equal, free, free_Identifier);
+                                                                              ^~~~~~~~~~~~~~~
+In file included from /usr/include/glib-2.0/glib.h:50,
+                 from lang.c:3:
+/usr/include/glib-2.0/glib/ghash.h:60:13: note: expected 'GDestroyNotify' {aka 'void (*)(void *)'} but argument is of type 'void (*)(struct Identifier *)'
+ GHashTable* g_hash_table_new_full          (GHashFunc       hash_func,
+             ^~~~~~~~~~~~~~~~~~~~~
+lang.c: At top level:
+lang.c:326:24: error: unknown type name 'SymbolTable'
+ void symbol_table_free(SymbolTable *st) {
+                        ^~~~~~~~~~~
+lang.c:331:6: error: conflicting types for 'symbol_table_extend'
+ void symbol_table_extend(struct SymbolTable *st, struct Identifier *id) {
+      ^~~~~~~~~~~~~~~~~~~
+In file included from lang.c:4:
+lang.h:167:6: note: previous declaration of 'symbol_table_extend' was here
+ void symbol_table_extend(struct SymbolTable *st, char *key, struct Identifier *id);
+      ^~~~~~~~~~~~~~~~~~~
+lang.c: In function 'symbol_table_extend':
+lang.c:332:42: error: 'key' undeclared (first use in this function); did you mean 'key_t'?
+     if (g_hash_table_contains(st->table, key)) {
+                                          ^~~
+                                          key_t
+lang.c:333:9: warning: implicit declaration of function 'log_error'; did you mean 'log_err'? [-Wimplicit-function-declaration]
+         log_error("Duplicate declaration for identifier: %s", id->id);
+         ^~~~~~~~~
+         log_err
+lang.c:335:9: warning: implicit declaration of function 'g_hash_table_'; did you mean 'g_hash_table_ref'? [-Wimplicit-function-declaration]
+         g_hash_table_(st->table, id->id, id);
+         ^~~~~~~~~~~~~
+         g_hash_table_ref
+lang.c: At top level:
+lang.c:339:47: warning: 'struct SymbolTabler' declared inside parameter list will not be visible outside of this definition or declaration
+ struct Identifier *symbol_table_lookup(struct SymbolTabler *st, char *key) {
+                                               ^~~~~~~~~~~~
+lang.c:339:20: error: conflicting types for 'symbol_table_lookup'
+ struct Identifier *symbol_table_lookup(struct SymbolTabler *st, char *key) {
+                    ^~~~~~~~~~~~~~~~~~~
+In file included from lang.c:4:
+lang.h:168:20: note: previous declaration of 'symbol_table_lookup' was here
+ struct Identifier *symbol_table_lookup(struct SymbolTable *st, char *key);
+                    ^~~~~~~~~~~~~~~~~~~
+lang.c: In function 'symbol_table_lookup':
+lang.c:340:31: warning: initialization of 'struct SymbolTable *' from incompatible pointer type 'struct SymbolTabler *' [-Wincompatible-pointer-types]
+     struct SymbolTable *cur = st;
+                               ^~
+lang.c:342:79: error: dereferencing pointer to incomplete type 'struct SymbolTabler'
+         struct Identifier *match = (struct Identifier *)g_hash_table_lookup(st->table, key);
+                                                                               ^~
+lang.c: In function 'symbol_table_new':
+lang.c:324:1: warning: control reaches end of non-void function [-Wreturn-type]
+ }
+ ^
+In file included from front.c:3:
+lang.h:48:20: error: field 'node_type' has incomplete type
+     enum node_type node_type;
+                    ^~~~~~~~~
+In file included from parser.l:4:
+lang.h:48:20: error: field 'node_type' has incomplete type
+     enum node_type node_type;
+                    ^~~~~~~~~
+In file included from parser.y:6:
+lang.h:48:20: error: field 'node_type' has incomplete type
+     enum node_type node_type;
+                    ^~~~~~~~~
+parser.y: In function 'yyparse':
+parser.y:76:52: error: too few arguments to function 'make_Program'
+                     struct Program *full_program = make_Program($1);
+                                                    ^~~~~~~~~~~~
+In file included from parser.y:6:
+lang.h:151:17: note: declared here
+ struct Program *make_Program(GList *declarations, GList *functions);
+                 ^~~~~~~~~~~~
+parser.y:78:21: error: 'symbol_type' undeclared (first use in this function); did you mean 'symbol_table'?
+                     symbol_type = symbol_table_new(NULL);
+                     ^~~~~~~~~~~
+                     symbol_table
+parser.y:78:21: note: each undeclared identifier is reported only once for each function it appears in
+parser.y:95:20: warning: assignment to 'struct AstNode *' from incompatible pointer type 'struct Declaration *' [-Wincompatible-pointer-types]
+                 declaration { $$ = $1; }
+                    ^
+parser.y:97:20: warning: assignment to 'struct AstNode *' from incompatible pointer type 'struct Function *' [-Wincompatible-pointer-types]
+                 function { $$ = $1; }
+                    ^
+parser.y:103:55: warning: passing argument 2 of 'symbol_table_extend' from incompatible pointer type [-Wincompatible-pointer-types]
+                     symbol_table_extend(symbol_table, identifier);
+                                                       ^~~~~~~~~~
+In file included from parser.y:6:
+lang.h:167:56: note: expected 'char *' but argument is of type 'struct Identifier *'
+ void symbol_table_extend(struct SymbolTable *st, char *key, struct Identifier *id);
+                                                  ~~~~~~^~~
+parser.y:103:21: error: too few arguments to function 'symbol_table_extend'
+                     symbol_table_extend(symbol_table, identifier);
+                     ^~~~~~~~~~~~~~~~~~~
+In file included from parser.y:6:
+lang.h:167:6: note: declared here
+ void symbol_table_extend(struct SymbolTable *st, char *key, struct Identifier *id);
+      ^~~~~~~~~~~~~~~~~~~
+parser.y:123:20: warning: assignment to 'struct AstNode *' from incompatible pointer type 'struct Declaration *' [-Wincompatible-pointer-types]
+                 declaration { $$ = $1; }
+                    ^
+parser.y:124:20: warning: assignment to 'struct AstNode *' from incompatible pointer type 'struct Statement *' [-Wincompatible-pointer-types]
+         |       statement { $$ = $1; }
+                    ^
+parser.y:137:53: error: too few arguments to function 'make_Identifier'
+                     struct Identifier *identifier = make_Identifier($2);
+                                                     ^~~~~~~~~~~~~~~
+In file included from parser.y:6:
+lang.h:139:20: note: declared here
+ struct Identifier *make_Identifier(char *id, struct Type *type);
+                    ^~~~~~~~~~~~~~~
+parser.y:140:55: warning: passing argument 2 of 'symbol_table_extend' from incompatible pointer type [-Wincompatible-pointer-types]
+                     symbol_table_extend(symbol_table, identifier);
+                                                       ^~~~~~~~~~
+In file included from parser.y:6:
+lang.h:167:56: note: expected 'char *' but argument is of type 'struct Identifier *'
+ void symbol_table_extend(struct SymbolTable *st, char *key, struct Identifier *id);
+                                                  ~~~~~~^~~
+parser.y:140:21: error: too few arguments to function 'symbol_table_extend'
+                     symbol_table_extend(symbol_table, identifier);
+                     ^~~~~~~~~~~~~~~~~~~
+In file included from parser.y:6:
+lang.h:167:6: note: declared here
+ void symbol_table_extend(struct SymbolTable *st, char *key, struct Identifier *id);
+      ^~~~~~~~~~~~~~~~~~~
+parser.y:143:45: error: too few arguments to function 'make_Function'
+                     struct Function *func = make_Function($1, identifier, params_list, $6);
+                                             ^~~~~~~~~~~~~
+In file included from parser.y:6:
+lang.h:150:18: note: declared here
+ struct Function *make_Function(struct Type *return_type, struct Identifier *name, GList *param_declarations, GList *body_declarations, GList *body_statements);
+                  ^~~~~~~~~~~~~
+parser.y:163:53: error: too few arguments to function 'make_Identifier'
+                     struct Identifier *identifier = make_Identifier($1);
+                                                     ^~~~~~~~~~~~~~~
+In file included from parser.y:6:
+lang.h:139:20: note: declared here
+ struct Identifier *make_Identifier(char *id, struct Type *type);
+                    ^~~~~~~~~~~~~~~
+parser.y:185:53: error: too few arguments to function 'make_Identifier'
+                     struct Identifier *identifier = make_Identifier($1);
+                                                     ^~~~~~~~~~~~~~~
+In file included from parser.y:6:
+lang.h:139:20: note: declared here
+ struct Identifier *make_Identifier(char *id, struct Type *type);
+                    ^~~~~~~~~~~~~~~
+make: *** [Makefile:17: compiler] Error 1

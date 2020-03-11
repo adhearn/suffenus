@@ -28,13 +28,12 @@ void print_Type(struct Type *type) {
 void Type_make_fn_type(struct Type *type) {
     char *old_type_str = type->type;
     asprintf(&(type->type), "%s()", old_type_str);
-    return type;
 }
 
 struct Identifier *make_Identifier(char *id, struct Type *type) {
     struct Identifier *ident = malloc(sizeof(struct Identifier));
     check_mem(id);
-
+    id->node_type = NODE_TYPE_IDENTIFIER;
     ident->id = id;
     ident->type = type;
     return ident;
@@ -52,7 +51,7 @@ void print_Identifier(struct Identifier *id) {
 struct Constant *make_Constant(int constant) {
     struct Constant *c = malloc(sizeof(struct Identifier));
     check_mem(c);
-
+    c->node_type = NODE_TYPE_CONSTANT;
     c->val = constant;
     return c;
 }
@@ -68,7 +67,7 @@ void print_Constant(struct Constant *c) {
 struct Declaration *make_Declaration(struct Type *type, struct Identifier *id) {
     struct Declaration *decl = malloc(sizeof(struct Declaration));
     check_mem(decl);
-
+    decl->node_type = NODE_TYPE_DECLARATION;
     decl->type = type;
     decl->id = id;
     return decl;
@@ -147,6 +146,7 @@ void free_Expr_constant(struct Expr_constant *expr) {
 struct Expr *make_Expr(enum Expr_type type) {
     struct Expr *expr = malloc(sizeof(struct Expr));
     check_mem(expr);
+    expr->node_type = NODE_TYPE_EXPR;
     expr->type = type;
     return expr;
 }
@@ -215,6 +215,7 @@ void free_Statement_return(struct Statement_return *ret) {
 struct Statement *make_Statement(enum Statement_type type) {
     struct Statement *stmt = malloc(sizeof(struct Statement));
     check_mem(stmt);
+    stmt->node_type = NODE_TYPE_STATEMENT;
     stmt->type = type;
     return stmt;
 }
@@ -246,11 +247,25 @@ void print_Statement(struct Statement *stmt) {
     printf("\n");
 }
 
+struct Block *block_new(GList *block_elements, struct SymbolTable *st) {
+    struct Block *block = malloc(sizeof(struct Block));
+    check_mem(block);
+
+    block->node_type = NODE_TYPE_BLOCK;
+    block->block_elements = block_elements;
+    block->st = st;
+    return block;
+}
+
+void block_free(struct Block *block) {
+    g_list_free_full(block->block_elements, (GDestroyNotify)free_block_elements);
+}
 
 struct Function *make_Function(struct Type *return_type, struct Identifier *name, GList *param_declarations, GList *body_declarations, GList *body_statements) {
     struct Function *function = malloc(sizeof(struct Function));
     check_mem(function);
 
+    function->node_type = NODE_TYPE_FUNCTION;
     function->return_type = return_type;
     function->name = name;
     function->param_declarations = param_declarations;
@@ -278,12 +293,12 @@ void print_Function(struct Function *func) {
     g_list_foreach(func->body_statements, (GFunc)print_Statement, NULL);
 }
 
-struct Program *make_Program(GList *declarations, GList *functions) {
+struct Program *make_Program(GList *top_level_nodes) {
     struct Program *prog = malloc(sizeof(struct Program));
     check_mem(prog);
 
-    prog->declarations = declarations;
-    prog->functions = functions;
+    prog->node_type = NODE_TYPE_PROGRAM;
+    prog->declarations_and_functions = declarations_and_functions;
     return prog;
 }
 
@@ -297,4 +312,37 @@ void print_Program(struct Program *prog) {
     printf("Program:\n");
     g_list_foreach(prog->declarations, (GFunc)print_Declaration, NULL);
     g_list_foreach(prog->functions, (GFunc)print_Function, NULL);
+}
+
+struct SymbolTable *symbol_table_new(struct SymbolTable* parent) {
+    struct SymbolTable *st = malloc(sizeof(struct SymbolTable));
+    check_mem(st);
+
+    st->parent = parent;
+    GHashTable *table = g_hash_table_new_full(g_str_hash, g_str_equal, free, free_Identifier);
+    st->table = table;
+}
+
+void symbol_table_free(SymbolTable *st) {
+    g_hash_table_destry(st->table);
+    free(st);
+}
+
+void symbol_table_extend(struct SymbolTable *st, struct Identifier *id) {
+    if (g_hash_table_contains(st->table, key)) {
+        log_error("Duplicate declaration for identifier: %s", id->id);
+    } else {
+        g_hash_table_(st->table, id->id, id);
+    }
+}
+
+struct Identifier *symbol_table_lookup(struct SymbolTabler *st, char *key) {
+    struct SymbolTable *cur = st;
+    do {
+        struct Identifier *match = (struct Identifier *)g_hash_table_lookup(st->table, key);
+        if (match) {
+            return match;
+        }
+    } while ((cur = cur->parent));
+    return NULL;
 }

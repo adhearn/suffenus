@@ -71,7 +71,7 @@ extern int yydebug;
 
 union YYSTYPE
 {
-#line 16 "parser.y" /* yacc.c:1921  */
+#line 19 "parser.y" /* yacc.c:1921  */
 
     int integer;
     char *str;
@@ -86,8 +86,9 @@ union YYSTYPE
     struct Function *function;
     struct Type *type;
     struct Statement_assignment *assignment;
+    struct AstNode *node;
 
-#line 91 "parser.tab.h" /* yacc.c:1921  */
+#line 92 "parser.tab.h" /* yacc.c:1921  */
 };
 
 typedef union YYSTYPE YYSTYPE;
