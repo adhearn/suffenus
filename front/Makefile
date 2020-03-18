@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS =`pkg-config --cflags glib-2.0` -I. -g -Wall -D_GNU_SOURCE=1 -std=c17 --ms-extensions
 LIBS = `pkg-config --libs glib-2.0`
 
-SRC_FILES=lang.c front.c
+SRC_FILES=lang.c analysis.c icg.c front.c
 
 LEXER_GEN_SRC=parser.l
 PARSER_GEN_SRC=parser.y

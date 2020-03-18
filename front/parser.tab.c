@@ -79,10 +79,9 @@
 int yylex();
 int yyerror(struct Program **prog, const char *msg);
 extern int yylineno;
-struct SymbolTable *symbol_table;
 
 
-#line 86 "parser.tab.c" /* yacc.c:337  */
+#line 85 "parser.tab.c" /* yacc.c:337  */
 # ifndef YY_NULLPTR
 #  if defined __cplusplus
 #   if 201103L <= __cplusplus
@@ -142,7 +141,7 @@ extern int yydebug;
 
 union YYSTYPE
 {
-#line 19 "parser.y" /* yacc.c:352  */
+#line 18 "parser.y" /* yacc.c:352  */
 
     int integer;
     char *str;
@@ -157,7 +156,8 @@ union YYSTYPE
     struct Function *function;
     struct Type *type;
     struct Statement_assignment *assignment;
-    struct AstNode *node;
+    struct Block *block;
+    void *block_element;
 
 #line 163 "parser.tab.c" /* yacc.c:352  */
 };
@@ -464,9 +464,9 @@ static const yytype_uint8 yytranslate[] =
   /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_uint8 yyrline[] =
 {
-       0,    75,    75,    82,    88,    95,    97,   101,   110,   115,
-     123,   124,   136,   148,   153,   162,   170,   177,   184,   192,
-     202
+       0,    75,    75,    82,    89,    95,    97,   101,   109,   113,
+     122,   123,   135,   145,   150,   159,   167,   174,   181,   189,
+     199
 };
 #endif
 
@@ -1270,9 +1270,9 @@ yyreduce:
         case 2:
 #line 75 "parser.y" /* yacc.c:1652  */
     {
-                    struct Program *full_program = make_Program((yyvsp[0].list));
+                    struct Program *full_program = program_new((yyvsp[0].block));
                     *prog = full_program;
-                    symbol_type = symbol_table_new(NULL);
+
                 }
 #line 1278 "parser.tab.c" /* yacc.c:1652  */
     break;
@@ -1281,178 +1281,175 @@ yyreduce:
 #line 82 "parser.y" /* yacc.c:1652  */
     {
                     GList *list = NULL;
-                    list = g_list_append(list, (yyvsp[0].node));
-                    (yyval.list) = list;
+                    list = g_list_append(list, (yyvsp[0].block_element));
+                    struct Block *block = block_new(list, NULL);
+                    (yyval.block) = block;
                 }
-#line 1288 "parser.tab.c" /* yacc.c:1652  */
+#line 1289 "parser.tab.c" /* yacc.c:1652  */
     break;
 
   case 4:
-#line 88 "parser.y" /* yacc.c:1652  */
+#line 89 "parser.y" /* yacc.c:1652  */
     {
-                    GList *list = g_list_append((yyvsp[-1].list), (yyvsp[0].node));
-                    (yyval.list) = list;
+                    (yyval.block) = block_extend((yyvsp[-1].block), (yyvsp[0].block_element));
                 }
 #line 1297 "parser.tab.c" /* yacc.c:1652  */
     break;
 
   case 5:
 #line 95 "parser.y" /* yacc.c:1652  */
-    { (yyval.node) = (yyvsp[0].declaration); }
+    { (yyval.block_element) = (yyvsp[0].declaration); }
 #line 1303 "parser.tab.c" /* yacc.c:1652  */
     break;
 
   case 6:
 #line 97 "parser.y" /* yacc.c:1652  */
-    { (yyval.node) = (yyvsp[0].function); }
+    { (yyval.block_element) = (yyvsp[0].function); }
 #line 1309 "parser.tab.c" /* yacc.c:1652  */
     break;
 
   case 7:
 #line 101 "parser.y" /* yacc.c:1652  */
     {
-                    struct Identifier *identifier = make_Identifier((yyvsp[-1].str), (yyvsp[-2].type));
-                    symbol_table_extend(symbol_table, identifier);
-                    struct Declaration *decl = make_Declaration((yyvsp[-2].type), identifier);
+                    struct Identifier *identifier = identifier_new((yyvsp[-1].str), (yyvsp[-2].type));
+                    struct Declaration *decl = declaration_new((yyvsp[-2].type), identifier);
                     (yyval.declaration) = decl;
                 }
-#line 1320 "parser.tab.c" /* yacc.c:1652  */
+#line 1319 "parser.tab.c" /* yacc.c:1652  */
     break;
 
   case 8:
-#line 110 "parser.y" /* yacc.c:1652  */
+#line 109 "parser.y" /* yacc.c:1652  */
     {
-                    GList *list = g_list_append((yyvsp[-1].list), (yyvsp[0].node));
-                    (yyval.list) = list;
+                    (yyval.block) = block_extend((yyvsp[-1].block), (yyvsp[0].block_element));
                 }
-#line 1329 "parser.tab.c" /* yacc.c:1652  */
+#line 1327 "parser.tab.c" /* yacc.c:1652  */
     break;
 
   case 9:
-#line 115 "parser.y" /* yacc.c:1652  */
+#line 113 "parser.y" /* yacc.c:1652  */
     {
                     GList *list = NULL;
-                    list = g_list_append(list, (yyvsp[0].node));
-                    (yyval.list) = list;
+                    list = g_list_append(list, (yyvsp[0].block_element));
+                    struct Block *block = block_new(list, NULL);
+                    (yyval.block) = block;
                 }
-#line 1339 "parser.tab.c" /* yacc.c:1652  */
+#line 1338 "parser.tab.c" /* yacc.c:1652  */
     break;
 
   case 10:
-#line 123 "parser.y" /* yacc.c:1652  */
-    { (yyval.node) = (yyvsp[0].declaration); }
-#line 1345 "parser.tab.c" /* yacc.c:1652  */
+#line 122 "parser.y" /* yacc.c:1652  */
+    { (yyval.block_element) = (yyvsp[0].declaration); }
+#line 1344 "parser.tab.c" /* yacc.c:1652  */
     break;
 
   case 11:
-#line 124 "parser.y" /* yacc.c:1652  */
-    { (yyval.node) = (yyvsp[0].statement); }
-#line 1351 "parser.tab.c" /* yacc.c:1652  */
+#line 123 "parser.y" /* yacc.c:1652  */
+    { (yyval.block_element) = (yyvsp[0].statement); }
+#line 1350 "parser.tab.c" /* yacc.c:1652  */
     break;
 
   case 12:
-#line 136 "parser.y" /* yacc.c:1652  */
+#line 135 "parser.y" /* yacc.c:1652  */
     {
-                    struct Identifier *identifier = make_Identifier((yyvsp[-5].str));
-                    Type_make_fn_type((yyvsp[-6].type));
+                    struct Identifier *identifier = identifier_new((yyvsp[-5].str), NULL);
+                    type_make_fn_type((yyvsp[-6].type));
                     identifier->type = (yyvsp[-6].type);
-                    symbol_table_extend(symbol_table, identifier);
-                    symbol_table = symbol_table_new(symbol_table);
                     GList *params_list = NULL;
-                    struct Function *func = make_Function((yyvsp[-6].type), identifier, params_list, (yyvsp[-1].list));
+                    struct Function *func = function_new((yyvsp[-6].type), identifier, params_list, (yyvsp[-1].block));
                     (yyval.function) = func;
                 }
-#line 1366 "parser.tab.c" /* yacc.c:1652  */
+#line 1363 "parser.tab.c" /* yacc.c:1652  */
     break;
 
   case 13:
-#line 148 "parser.y" /* yacc.c:1652  */
+#line 145 "parser.y" /* yacc.c:1652  */
     {
-                    struct Statement *stmt = make_Statement(STMT_ASSIGN);
+                    struct Statement *stmt = statement_new(STMT_ASSIGN);
                     stmt->assignment = (yyvsp[-1].assignment);
                     (yyval.statement) = stmt;
                 }
-#line 1376 "parser.tab.c" /* yacc.c:1652  */
+#line 1373 "parser.tab.c" /* yacc.c:1652  */
     break;
 
   case 14:
-#line 153 "parser.y" /* yacc.c:1652  */
+#line 150 "parser.y" /* yacc.c:1652  */
     {
-                    struct Statement_return *ret = make_Return((yyvsp[-1].expr));
-                    struct Statement *stmt =make_Statement(STMT_RETURN);
+                    struct Statement_return *ret = return_new((yyvsp[-1].expr));
+                    struct Statement *stmt =statement_new(STMT_RETURN);
                     stmt->ret = ret;
                     (yyval.statement) = stmt;
                 }
-#line 1387 "parser.tab.c" /* yacc.c:1652  */
+#line 1384 "parser.tab.c" /* yacc.c:1652  */
     break;
 
   case 15:
-#line 162 "parser.y" /* yacc.c:1652  */
+#line 159 "parser.y" /* yacc.c:1652  */
     {
-                    struct Identifier *identifier = make_Identifier((yyvsp[-2].str));
-                    struct Statement_assignment *assignment = make_Assignment(identifier, (yyvsp[0].expr));
+                    struct Identifier *identifier = identifier_new((yyvsp[-2].str), NULL);
+                    struct Statement_assignment *assignment = assignment_new(identifier, (yyvsp[0].expr));
                     (yyval.assignment) = assignment;
                 }
-#line 1397 "parser.tab.c" /* yacc.c:1652  */
+#line 1394 "parser.tab.c" /* yacc.c:1652  */
     break;
 
   case 16:
-#line 170 "parser.y" /* yacc.c:1652  */
+#line 167 "parser.y" /* yacc.c:1652  */
     {
-                    struct Expr_op *binop = make_Expr_Op((yyvsp[-1].op), (yyvsp[-2].expr), (yyvsp[0].expr));
-                    struct Expr *expr = make_Expr(EXPR_OP);
+                    struct Expr_op *binop = expr_op_new((yyvsp[-1].op), (yyvsp[-2].expr), (yyvsp[0].expr));
+                    struct Expr *expr = expr_new(EXPR_OP);
                     expr->op = binop;
                     (yyval.expr) = expr;
                 }
-#line 1408 "parser.tab.c" /* yacc.c:1652  */
+#line 1405 "parser.tab.c" /* yacc.c:1652  */
     break;
 
   case 17:
-#line 177 "parser.y" /* yacc.c:1652  */
+#line 174 "parser.y" /* yacc.c:1652  */
     {
-                    struct Expr_op *relop = make_Expr_Op((yyvsp[-1].op), (yyvsp[-2].expr), (yyvsp[0].expr));
-                    struct Expr *expr = make_Expr(EXPR_OP);
+                    struct Expr_op *relop = expr_op_new((yyvsp[-1].op), (yyvsp[-2].expr), (yyvsp[0].expr));
+                    struct Expr *expr = expr_new(EXPR_OP);
                     expr->op = relop;
                     (yyval.expr) = expr;
                 }
-#line 1419 "parser.tab.c" /* yacc.c:1652  */
+#line 1416 "parser.tab.c" /* yacc.c:1652  */
     break;
 
   case 18:
-#line 184 "parser.y" /* yacc.c:1652  */
+#line 181 "parser.y" /* yacc.c:1652  */
     {
-                    struct Identifier *identifier = make_Identifier((yyvsp[0].str));
-                    struct Expr_identifier *expr_identifier = make_Expr_Identifier(identifier);
-                    struct Expr *expr = make_Expr(EXPR_IDENTIFIER);
+                    struct Identifier *identifier = identifier_new((yyvsp[0].str), NULL);
+                    struct Expr_identifier *expr_identifier = expr_identifier_new(identifier);
+                    struct Expr *expr = expr_new(EXPR_IDENTIFIER);
                     expr->id = expr_identifier;
                     (yyval.expr) = expr;
                 }
-#line 1431 "parser.tab.c" /* yacc.c:1652  */
+#line 1428 "parser.tab.c" /* yacc.c:1652  */
     break;
 
   case 19:
-#line 192 "parser.y" /* yacc.c:1652  */
+#line 189 "parser.y" /* yacc.c:1652  */
     {
-                    struct Constant *constant = make_Constant((yyvsp[0].integer));
-                    struct Expr_constant *expr_constant = make_Expr_Constant(constant);
-                    struct Expr *expr = make_Expr(EXPR_CONSTANT);
+                    struct Constant *constant = constant_new((yyvsp[0].integer));
+                    struct Expr_constant *expr_constant = expr_constant_new(constant);
+                    struct Expr *expr = expr_new(EXPR_CONSTANT);
                     expr->constant = expr_constant;
                     (yyval.expr) = expr;
                 }
-#line 1443 "parser.tab.c" /* yacc.c:1652  */
+#line 1440 "parser.tab.c" /* yacc.c:1652  */
     break;
 
   case 20:
-#line 202 "parser.y" /* yacc.c:1652  */
+#line 199 "parser.y" /* yacc.c:1652  */
     {
-                    struct Type *type = make_Type((yyvsp[0].str));
+                    struct Type *type = type_new((yyvsp[0].str));
                     (yyval.type) = type;
                 }
-#line 1452 "parser.tab.c" /* yacc.c:1652  */
+#line 1449 "parser.tab.c" /* yacc.c:1652  */
     break;
 
 
-#line 1456 "parser.tab.c" /* yacc.c:1652  */
+#line 1453 "parser.tab.c" /* yacc.c:1652  */
       default: break;
     }
   /* User semantic actions sometimes alter yychar, and that requires
@@ -1683,7 +1680,7 @@ yyreturn:
 #endif
   return yyresult;
 }
-#line 208 "parser.y" /* yacc.c:1918  */
+#line 205 "parser.y" /* yacc.c:1918  */
 
 
 int yyerror (struct Program **p, const char *s) {

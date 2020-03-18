@@ -10,7 +10,6 @@
 int yylex();
 int yyerror(struct Program **prog, const char *msg);
 extern int yylineno;
-struct SymbolTable *symbol_table;
 
 %}
 
@@ -30,7 +29,8 @@ struct SymbolTable *symbol_table;
     struct Function *function;
     struct Type *type;
     struct Statement_assignment *assignment;
-    struct AstNode *node;
+    struct Block *block;
+    void *block_element;
 }
 
 %parse-param {struct Program **prog}
@@ -55,8 +55,8 @@ struct SymbolTable *symbol_table;
 %type   <program>       program
 %type   <integer>       INTEGER
 %type   <op>            RELOP BINOP UNOP
-%type   <list>          top_level_block block
-%type   <node>          top_level_block_element block_element
+%type   <block>         top_level_block block
+%type   <block_element> top_level_block_element block_element
 %type   <statement>     statement
 %type   <declaration>   declaration
 %type   <type>          type
@@ -73,21 +73,21 @@ struct SymbolTable *symbol_table;
 
 program:
                 top_level_block {
-                    struct Program *full_program = make_Program($1);
+                    struct Program *full_program = program_new($1);
                     *prog = full_program;
-                    symbol_type = symbol_table_new(NULL);
+
                 }
                 ;
 top_level_block:
                 top_level_block_element {
                     GList *list = NULL;
                     list = g_list_append(list, $1);
-                    $$ = list;
+                    struct Block *block = block_new(list, NULL);
+                    $$ = block;
                 }
         |
                 top_level_block top_level_block_element {
-                    GList *list = g_list_append($1, $2);
-                    $$ = list;
+                    $$ = block_extend($1, $2);
                 }
                 ;
 
@@ -99,23 +99,22 @@ top_level_block_element:
 
 declaration:
                 type ID SEMI {
-                    struct Identifier *identifier = make_Identifier($2, $1);
-                    symbol_table_extend(symbol_table, identifier);
-                    struct Declaration *decl = make_Declaration($1, identifier);
+                    struct Identifier *identifier = identifier_new($2, $1);
+                    struct Declaration *decl = declaration_new($1, identifier);
                     $$ = decl;
                 }
                 ;
 
 block:
                 block block_element {
-                    GList *list = g_list_append($1, $2);
-                    $$ = list;
+                    $$ = block_extend($1, $2);
                 }
         |
                 block_element {
                     GList *list = NULL;
                     list = g_list_append(list, $1);
-                    $$ = list;
+                    struct Block *block = block_new(list, NULL);
+                    $$ = block;
                 }
         ;
 
@@ -134,25 +133,23 @@ function:
                 * NB: the function name itself will still belong in the outer scope!
                 */
                 type ID LPAREN RPAREN LBRACE block RBRACE {
-                    struct Identifier *identifier = make_Identifier($2);
-                    Type_make_fn_type($1);
+                    struct Identifier *identifier = identifier_new($2, NULL);
+                    type_make_fn_type($1);
                     identifier->type = $1;
-                    symbol_table_extend(symbol_table, identifier);
-                    symbol_table = symbol_table_new(symbol_table);
                     GList *params_list = NULL;
-                    struct Function *func = make_Function($1, identifier, params_list, $6);
+                    struct Function *func = function_new($1, identifier, params_list, $6);
                     $$ = func;
                 }
                 ;
 
 statement:      assignment SEMI {
-                    struct Statement *stmt = make_Statement(STMT_ASSIGN);
+                    struct Statement *stmt = statement_new(STMT_ASSIGN);
                     stmt->assignment = $1;
                     $$ = stmt;
                 }
                 | RETURN expr SEMI {
-                    struct Statement_return *ret = make_Return($2);
-                    struct Statement *stmt =make_Statement(STMT_RETURN);
+                    struct Statement_return *ret = return_new($2);
+                    struct Statement *stmt =statement_new(STMT_RETURN);
                     stmt->ret = ret;
                     $$ = stmt;
                 }
@@ -160,39 +157,39 @@ statement:      assignment SEMI {
 
 assignment:
                 ID EQUALS expr {
-                    struct Identifier *identifier = make_Identifier($1);
-                    struct Statement_assignment *assignment = make_Assignment(identifier, $3);
+                    struct Identifier *identifier = identifier_new($1, NULL);
+                    struct Statement_assignment *assignment = assignment_new(identifier, $3);
                     $$ = assignment;
                 }
                 ;
 
 expr:
                 expr BINOP expr {
-                    struct Expr_op *binop = make_Expr_Op($2, $1, $3);
-                    struct Expr *expr = make_Expr(EXPR_OP);
+                    struct Expr_op *binop = expr_op_new($2, $1, $3);
+                    struct Expr *expr = expr_new(EXPR_OP);
                     expr->op = binop;
                     $$ = expr;
                 }
         |
                 expr RELOP expr {
-                    struct Expr_op *relop = make_Expr_Op($2, $1, $3);
-                    struct Expr *expr = make_Expr(EXPR_OP);
+                    struct Expr_op *relop = expr_op_new($2, $1, $3);
+                    struct Expr *expr = expr_new(EXPR_OP);
                     expr->op = relop;
                     $$ = expr;
                 }
         |
                 ID {
-                    struct Identifier *identifier = make_Identifier($1);
-                    struct Expr_identifier *expr_identifier = make_Expr_Identifier(identifier);
-                    struct Expr *expr = make_Expr(EXPR_IDENTIFIER);
+                    struct Identifier *identifier = identifier_new($1, NULL);
+                    struct Expr_identifier *expr_identifier = expr_identifier_new(identifier);
+                    struct Expr *expr = expr_new(EXPR_IDENTIFIER);
                     expr->id = expr_identifier;
                     $$ = expr;
                 }
         |
                 INTEGER {
-                    struct Constant *constant = make_Constant($1);
-                    struct Expr_constant *expr_constant = make_Expr_Constant(constant);
-                    struct Expr *expr = make_Expr(EXPR_CONSTANT);
+                    struct Constant *constant = constant_new($1);
+                    struct Expr_constant *expr_constant = expr_constant_new(constant);
+                    struct Expr *expr = expr_new(EXPR_CONSTANT);
                     expr->constant = expr_constant;
                     $$ = expr;
                 }
@@ -200,7 +197,7 @@ expr:
 
 type:
                 ID {
-                    struct Type *type = make_Type($1);
+                    struct Type *type = type_new($1);
                     $$ = type;
                 }
                 ;

@@ -4,19 +4,33 @@
 #include "lang.h"
 #include "util.h"
 
-struct Type *make_Type(char *type) {
+/**
+ * I really don't like this, but I'm not yet familiar enough with the implications to know how
+ * bad of an idea this is. The first element of every node struct is a node type, so we can treat
+ * a pointer to any AST node as a pointer to the node type. This feels pretty hacky, but I need
+ * some form of abstraction over node types, and nothing else fits the bill...
+ */
+enum Node_type ast_node_type(void *ast_node) {
+    enum Node_type node_type = *(enum Node_type *)ast_node;
+    return node_type;
+}
+
+// Reverse lookup for op names, useful for printing
+char *OP_NAMES[] = { "+", "-", "*", "/", "=", "!=", "<", ">", "<=", ">=" };
+
+struct Type *type_new(char *type) {
     struct Type *t = malloc(sizeof(struct Type));
     check_mem(t);
     t->type = type;
     return t;
 }
 
-void free_Type(struct Type *type) {
+void type_free(struct Type *type) {
     free(type->type);
     free(type);
 }
 
-void print_Type(struct Type *type) {
+void type_print(struct Type *type) {
     printf("%s", type->type);
 }
 
@@ -25,30 +39,30 @@ void print_Type(struct Type *type) {
  * support parameters! We can just add some empty parens at the end of the type
  * string for now, but we'll have to support params later.
  */
-void Type_make_fn_type(struct Type *type) {
+void type_make_fn_type(struct Type *type) {
     char *old_type_str = type->type;
     asprintf(&(type->type), "%s()", old_type_str);
 }
 
-struct Identifier *make_Identifier(char *id, struct Type *type) {
-    struct Identifier *ident = malloc(sizeof(struct Identifier));
+struct Identifier *identifier_new(char *id, struct Type *type) {
+    struct Identifier *identifier = malloc(sizeof(struct Identifier));
     check_mem(id);
-    id->node_type = NODE_TYPE_IDENTIFIER;
-    ident->id = id;
-    ident->type = type;
-    return ident;
+    identifier->node_type = NODE_TYPE_IDENTIFIER;
+    identifier->id = id;
+    identifier->type = type;
+    return identifier;
 }
 
-void free_Identifier(struct Identifier *id) {
+void identifier_free(struct Identifier *id) {
     free(id->id);
     free(id);
 }
 
-void print_Identifier(struct Identifier *id) {
+void identifier_print(struct Identifier *id) {
     printf("%s", id->id);
 }
 
-struct Constant *make_Constant(int constant) {
+struct Constant *constant_new(int constant) {
     struct Constant *c = malloc(sizeof(struct Identifier));
     check_mem(c);
     c->node_type = NODE_TYPE_CONSTANT;
@@ -56,15 +70,15 @@ struct Constant *make_Constant(int constant) {
     return c;
 }
 
-void free_Constant(struct Constant *c) {
+void constant_free(struct Constant *c) {
     free(c);
 }
 
-void print_Constant(struct Constant *c) {
+void constant_print(struct Constant *c) {
     printf("%d", c->val);
 }
 
-struct Declaration *make_Declaration(struct Type *type, struct Identifier *id) {
+struct Declaration *declaration_new(struct Type *type, struct Identifier *id) {
     struct Declaration *decl = malloc(sizeof(struct Declaration));
     check_mem(decl);
     decl->node_type = NODE_TYPE_DECLARATION;
@@ -73,77 +87,57 @@ struct Declaration *make_Declaration(struct Type *type, struct Identifier *id) {
     return decl;
 }
 
-void free_Declaration(struct Declaration *decl) {
-    free_Type(decl->type);
-    free_Identifier(decl->id);
+void declaration_free(struct Declaration *decl) {
+    type_free(decl->type);
+    identifier_free(decl->id);
     free(decl);
 }
 
-void print_Declaration(struct Declaration *decl) {
+void declaration_print(struct Declaration *decl) {
     printf("Declaration: %s %s\n", decl->type->type, decl->id->id);
 }
 
 
-struct Expr_op *make_Expr_Op(enum Op op, struct Expr *arg1, struct Expr *arg2) {
+struct Expr_op *expr_op_new(enum Op op, struct Expr *arg1, struct Expr *arg2) {
     struct Expr_op *expr_op = malloc(sizeof(struct Expr_op));
     check_mem(expr_op);
-
     expr_op->op = op;
     expr_op->arg1 = arg1;
     expr_op->arg2 = arg2;
-
     return expr_op;
-
-    /* struct Expr *expr = malloc(sizeof(struct Expr)); */
-    /* check_mem(expr); */
-    /* expr->type = EXPR_OP; */
-    /* expr->op = expr_op; */
-    /* return expr; */
 }
 
-void free_Expr_op(struct Expr_op *expr) {
+void expr_op_free(struct Expr_op *expr) {
     free(expr->arg1);
     free(expr->arg2);
     free(expr);
 }
 
-struct Expr_identifier *make_Expr_Identifier(struct Identifier *id) {
+struct Expr_identifier *expr_identifier_new(struct Identifier *id) {
     struct Expr_identifier *expr_id = malloc(sizeof(struct Expr_identifier));
     check_mem(expr_id);
-
     expr_id->id = id;
     return expr_id;
-
-    /* struct Expr *expr = malloc(sizeof(struct Expr)); */
-    /* check_mem(expr); */
-    /* expr->id = expr_id; */
-    /* return expr; */
 }
 
-void free_Expr_identifier(struct Expr_identifier *expr) {
+void expr_identifier_free(struct Expr_identifier *expr) {
     free(expr->id);
     free(expr);
 }
 
-struct Expr_constant *make_Expr_Constant(struct Constant *constant) {
+struct Expr_constant *expr_constant_new(struct Constant *constant) {
     struct Expr_constant *expr_constant = malloc(sizeof(struct Expr_constant));
     check_mem(expr_constant);
     expr_constant->constant = constant;
-
     return expr_constant;
-
-    /* struct Expr *expr = malloc(sizeof(struct Expr)); */
-    /* check_mem(expr); */
-    /* expr->constant = expr_constant; */
-    /* return expr; */
 }
 
-void free_Expr_constant(struct Expr_constant *expr) {
+void expr_constant_free(struct Expr_constant *expr) {
     free(expr->constant);
     free(expr);
 }
 
-struct Expr *make_Expr(enum Expr_type type) {
+struct Expr *expr_new(enum Expr_type type) {
     struct Expr *expr = malloc(sizeof(struct Expr));
     check_mem(expr);
     expr->node_type = NODE_TYPE_EXPR;
@@ -151,68 +145,65 @@ struct Expr *make_Expr(enum Expr_type type) {
     return expr;
 }
 
-void free_Expr(struct Expr *expr) {
+void expr_free(struct Expr *expr) {
     switch (expr->type) {
     case (EXPR_CONSTANT):
-        free_Expr_constant(expr->constant);
+        expr_constant_free(expr->constant);
         break;
     case (EXPR_IDENTIFIER):
-        free_Expr_identifier(expr->id);
+        expr_identifier_free(expr->id);
         break;
     case (EXPR_OP):
-        free_Expr_op(expr->op);
+        expr_op_free(expr->op);
         break;
     }
 
     free(expr);
 }
 
-void print_Expr(struct Expr *expr) {
+void expr_print(struct Expr *expr) {
     switch (expr->type) {
     case (EXPR_CONSTANT):
-        print_Constant(expr->constant->constant);
+        constant_print(expr->constant->constant);
         break;
     case (EXPR_IDENTIFIER):
-        print_Identifier(expr->id->id);
+        identifier_print(expr->id->id);
         break;
     case (EXPR_OP):
-        print_Expr(expr->op->arg1);
-        printf(" %d ", expr->op->op);
-        print_Expr(expr->op->arg2);
+        expr_print(expr->op->arg1);
+        printf(" %s ", OP_NAMES[expr->op->op]);
+        expr_print(expr->op->arg2);
         break;
     }
 }
 
-struct Statement_assignment *make_Assignment(struct Identifier *id, struct Expr *expr) {
+struct Statement_assignment *assignment_new(struct Identifier *id, struct Expr *expr) {
     struct Statement_assignment  *assignment = malloc(sizeof(struct Statement_assignment));
     check_mem(assignment);
-
     assignment->id = id;
     assignment->expr = expr;
     return assignment;
 }
 
-void free_Statement_assignment(struct Statement_assignment *assignment) {
-    free_Identifier(assignment->id);
-    free_Expr(assignment->expr);
+void statement_assignment_free(struct Statement_assignment *assignment) {
+    identifier_free(assignment->id);
+    expr_free(assignment->expr);
     free(assignment);
 }
 
-struct Statement_return *make_Return(struct Expr *expr) {
+struct Statement_return *return_new(struct Expr *expr) {
     struct Statement_return *ret = malloc(sizeof(struct Statement_return));
     check_mem(ret);
-
     ret->expr = expr;
-
     return ret;
 }
 
-void free_Statement_return(struct Statement_return *ret) {
-    free_Expr(ret->expr);
+void statement_return_free(struct Statement_return *ret) {
+    expr_free(ret->expr);
     free(ret);
 }
 
-struct Statement *make_Statement(enum Statement_type type) {
+struct Statement *statement_new(enum Statement_type type) {
     struct Statement *stmt = malloc(sizeof(struct Statement));
     check_mem(stmt);
     stmt->node_type = NODE_TYPE_STATEMENT;
@@ -220,28 +211,27 @@ struct Statement *make_Statement(enum Statement_type type) {
     return stmt;
 }
 
-void free_Statement(struct Statement *stmt) {
+void statement_free(struct Statement *stmt) {
     switch(stmt->type) {
     case STMT_ASSIGN:
-        free_Statement_assignment(stmt->assignment);
+        statement_assignment_free(stmt->assignment);
         break;
     case STMT_RETURN:
-        free_Statement_return(stmt->ret);
+        statement_return_free(stmt->ret);
         break;
     }
-
     free(stmt);
 }
 
-void print_Statement(struct Statement *stmt) {
+void statement_print(struct Statement *stmt) {
     switch(stmt->type) {
     case STMT_ASSIGN:
         printf("Assignment: %s = ", stmt->assignment->id->id);
-        print_Expr(stmt->assignment->expr);
+        expr_print(stmt->assignment->expr);
         break;
     case STMT_RETURN:
         printf("Return: ");
-        print_Expr(stmt->ret->expr);
+        expr_print(stmt->ret->expr);
         break;
     }
     printf("\n");
@@ -257,11 +247,59 @@ struct Block *block_new(GList *block_elements, struct SymbolTable *st) {
     return block;
 }
 
-void block_free(struct Block *block) {
-    g_list_free_full(block->block_elements, (GDestroyNotify)free_block_elements);
+struct Block *block_extend(struct Block *block, void *elt) {
+    GList *block_elements = block->block_elements;
+    block->block_elements = g_list_append(block_elements, elt);
+    return block;
 }
 
-struct Function *make_Function(struct Type *return_type, struct Identifier *name, GList *param_declarations, GList *body_declarations, GList *body_statements) {
+void block_element_free(void *elt) {
+    // Hack: the node_type is first in all of our structs, so it doesn't matter which union field we use
+    // to access the node_type - it's always in the same spot (namely, offset 0)
+    enum Node_type node_type = ast_node_type(elt);
+    switch (node_type) {
+    case NODE_TYPE_FUNCTION:
+        function_free((struct Function *)elt);
+        break;
+    case NODE_TYPE_DECLARATION:
+        declaration_free((struct Declaration *)elt);
+        break;
+    case NODE_TYPE_STATEMENT:
+        statement_free((struct Statement*) elt);
+        break;
+    default:
+        log_err("Received invalid node type in block_element_free: %d", node_type);
+    }
+}
+
+void block_element_print(void *elt) {
+    // Hack: the node_type is first in all of our structs, so it doesn't matter which union field we use
+    // to access the node_type - it's always in the same spot (namely, offset 0)
+    enum Node_type node_type = ast_node_type(elt);
+    switch (node_type) {
+    case NODE_TYPE_FUNCTION:
+        function_print((struct Function *)elt);
+        break;
+    case NODE_TYPE_DECLARATION:
+        declaration_print((struct Declaration *)elt);
+        break;
+    case NODE_TYPE_STATEMENT:
+        statement_print((struct Statement*) elt);
+        break;
+    default:
+        log_err("Received invalid node type in block_element_print: %d", node_type);
+    }
+}
+
+void block_free(struct Block *block) {
+    g_list_free_full(block->block_elements, (GDestroyNotify)block_element_free);
+}
+
+void block_print(struct Block *block) {
+    g_list_foreach(block->block_elements, (GFunc)block_element_print, NULL);
+}
+
+struct Function *function_new(struct Type *return_type, struct Identifier *name, GList *param_declarations, struct Block *body) {
     struct Function *function = malloc(sizeof(struct Function));
     check_mem(function);
 
@@ -269,49 +307,43 @@ struct Function *make_Function(struct Type *return_type, struct Identifier *name
     function->return_type = return_type;
     function->name = name;
     function->param_declarations = param_declarations;
-    function->body_declarations = body_declarations;
-    function->body_statements = body_statements;
+    function->body = body;
 
     return function;
 }
 
-void free_Function(struct Function *func) {
-    free_Type(func->return_type);
-    free_Identifier(func->name);
-    g_list_free_full(func->param_declarations, (GDestroyNotify)free_Declaration);
-    g_list_free_full(func->body_declarations, (GDestroyNotify)free_Declaration);
-    g_list_free_full(func->body_statements, (GDestroyNotify)free_Statement);
+void function_free(struct Function *func) {
+    type_free(func->return_type);
+    identifier_free(func->name);
+    g_list_free_full(func->param_declarations, (GDestroyNotify)declaration_free);
+    block_free(func->body);
     free(func);
 }
 
-void print_Function(struct Function *func) {
+void function_print(struct Function *func) {
     printf("Function:\nName: %s\nReturn Type: %s\nParams:", func->name->id, func->return_type->type);
-    g_list_foreach(func->param_declarations, (GFunc)print_Declaration, NULL);
-    printf("Body Declarations:\n");
-    g_list_foreach(func->body_declarations, (GFunc)print_Declaration, NULL);
-    printf("Body Statements:\n");
-    g_list_foreach(func->body_statements, (GFunc)print_Statement, NULL);
+    g_list_foreach(func->param_declarations, (GFunc)declaration_print, NULL);
+    printf("Body:\n");
+    block_print(func->body);
 }
 
-struct Program *make_Program(GList *top_level_nodes) {
+struct Program *program_new(struct Block *block) {
     struct Program *prog = malloc(sizeof(struct Program));
     check_mem(prog);
 
     prog->node_type = NODE_TYPE_PROGRAM;
-    prog->declarations_and_functions = declarations_and_functions;
+    prog->top_level_block = block;
     return prog;
 }
 
-void free_Program(struct Program *prog) {
-    g_list_free_full(prog->declarations, (GDestroyNotify)free_Declaration);
-    g_list_free_full(prog->functions, (GDestroyNotify)free_Function);
+void program_free(struct Program *prog) {
+    block_free(prog->top_level_block);
     free(prog);
 }
 
-void print_Program(struct Program *prog) {
+void program_print(struct Program *prog) {
     printf("Program:\n");
-    g_list_foreach(prog->declarations, (GFunc)print_Declaration, NULL);
-    g_list_foreach(prog->functions, (GFunc)print_Function, NULL);
+    block_print(prog->top_level_block);
 }
 
 struct SymbolTable *symbol_table_new(struct SymbolTable* parent) {
@@ -319,30 +351,40 @@ struct SymbolTable *symbol_table_new(struct SymbolTable* parent) {
     check_mem(st);
 
     st->parent = parent;
-    GHashTable *table = g_hash_table_new_full(g_str_hash, g_str_equal, free, free_Identifier);
+    GHashTable *table = g_hash_table_new_full(g_str_hash, g_str_equal, free, (GDestroyNotify)identifier_free);
     st->table = table;
+    return st;
 }
 
-void symbol_table_free(SymbolTable *st) {
-    g_hash_table_destry(st->table);
+void symbol_table_free(struct SymbolTable *st) {
+    g_hash_table_destroy(st->table);
     free(st);
 }
 
 void symbol_table_extend(struct SymbolTable *st, struct Identifier *id) {
+    char *key = id->id;
     if (g_hash_table_contains(st->table, key)) {
-        log_error("Duplicate declaration for identifier: %s", id->id);
+        log_err("Duplicate declaration for identifier: %s\n", id->id);
     } else {
-        g_hash_table_(st->table, id->id, id);
+        g_hash_table_insert(st->table, id->id, id);
     }
 }
 
-struct Identifier *symbol_table_lookup(struct SymbolTabler *st, char *key) {
+struct Identifier *symbol_table_lookup(struct SymbolTable *st, char *key) {
     struct SymbolTable *cur = st;
     do {
-        struct Identifier *match = (struct Identifier *)g_hash_table_lookup(st->table, key);
+        struct Identifier *match = (struct Identifier *)g_hash_table_lookup(cur->table, key);
         if (match) {
             return match;
         }
     } while ((cur = cur->parent));
     return NULL;
+}
+
+/**
+ * Lookup a name in the symbol table without recursively traversing parent tables.
+ */
+struct Identifier *symbol_table_lookup_local(struct SymbolTable *st, char *key) {
+    struct Identifier *match = (struct Identifier *)g_hash_table_lookup(st->table, key);
+    return match;
 }
