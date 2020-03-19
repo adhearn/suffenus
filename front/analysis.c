@@ -21,37 +21,56 @@ void identifier_validate_declared(struct Identifier *identifier, struct SymbolTa
 
 void expr_build_symbol_table(struct Expr *expr, struct SymbolTable *st) {
     switch (expr->type) {
+    case (EXPR_ASSIGNMENT):
+        identifier_validate_declared(expr->assignment->lhs, st, &expr->assignment->lhs);
+        expr_build_symbol_table(expr->assignment->rhs, st);
+        break;
     case (EXPR_CONSTANT):
         break;
     case (EXPR_IDENTIFIER):
         identifier_validate_declared(expr->id->id, st, &expr->id->id);
         break;
-    case (EXPR_OP):
+    case (EXPR_BINOP):
+    case (EXPR_RELOP):
         expr_build_symbol_table(expr->op->arg1, st);
         expr_build_symbol_table(expr->op->arg2, st);
         break;
     }
 }
 
-void statement_assign_build_symbol_table(struct Statement_assignment* assignment, struct SymbolTable *st) {
-    struct Identifier *lhs = assignment->id;
-    identifier_validate_declared(lhs, st, &assignment->id);
-    struct Expr *rhs = assignment->expr;
-    expr_build_symbol_table(rhs, st);
+void statement_jump_build_symbol_table(struct StatementJump *jump, struct SymbolTable *st) {
+    switch(jump->type) {
+    case JUMP_BREAK:
+    case JUMP_CONTINUE:
+    case JUMP_GOTO:
+        break;
+    case JUMP_RETURN:
+        expr_build_symbol_table(jump->expr, st);
+        break;
+    }
 }
 
-void statement_return_build_symbol_table(struct Statement_return* ret, struct SymbolTable *st) {
-    expr_build_symbol_table(ret->expr, st);
-}
-
-void statement_build_symbol_table(struct Statement* statement, struct SymbolTable *st) {
+void statement_build_symbol_table(struct Statement *statement, struct SymbolTable *st) {
     switch(statement->type) {
-    case STMT_ASSIGN:
-        statement_assign_build_symbol_table(statement->assignment, st);
+    case (STMT_TYPE_COMPOUND):
+        block_build_symbol_table(statement->compound, st);
         break;
-    case STMT_RETURN:
-        statement_return_build_symbol_table(statement->ret, st);
+    case (STMT_TYPE_EXPR):
+        expr_build_symbol_table(statement->expr, st);
         break;
+    case (STMT_TYPE_JUMP):
+        statement_jump_build_symbol_table(statement->jump, st);
+        break;
+    case (STMT_TYPE_SELECTION):
+    {
+        struct StatementSelection *selection = statement->selection;
+        expr_build_symbol_table(selection->test, st);
+        statement_build_symbol_table(selection->conseq, st);
+        if (selection->alt) {
+            statement_build_symbol_table(selection->conseq, st);
+        }
+        break;
+    }
     default:
         log_err("Found unmatched statement type in statement_build_symbol_table: %d", statement->type);
         SYMBOL_TABLE_ERROR = TRUE;
@@ -85,7 +104,7 @@ void function_build_symbol_table(struct Function *func, struct SymbolTable *st) 
 
 void block_element_build_symbol_table(void *elt, void *untyped_st) {
     struct SymbolTable *st = (struct SymbolTable *)untyped_st;
-    enum Node_type node_type = ast_node_type(elt);
+    enum NodeType node_type = ast_node_type(elt);
     switch (node_type) {
     case NODE_TYPE_FUNCTION:
         function_build_symbol_table((struct Function *)elt, st);

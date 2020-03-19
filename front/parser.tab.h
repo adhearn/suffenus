@@ -54,15 +54,11 @@ extern int yydebug;
     BINOP = 260,
     ID = 261,
     INTEGER = 262,
-    SEMI = 263,
-    NEWLINE = 264,
-    LPAREN = 265,
-    RPAREN = 266,
-    LBRACE = 267,
-    RBRACE = 268,
-    RETURN = 269,
-    COMMA = 270,
-    EQUALS = 271
+    NEWLINE = 263,
+    RETURN = 264,
+    IF = 265,
+    ELSE = 266,
+    EQUALS = 267
   };
 #endif
 
@@ -85,11 +81,12 @@ union YYSTYPE
     struct Program *program;
     struct Function *function;
     struct Type *type;
-    struct Statement_assignment *assignment;
+    struct StatementSelection *selection;
+    struct StatementJump *jump;
     struct Block *block;
     void *block_element;
 
-#line 93 "parser.tab.h" /* yacc.c:1921  */
+#line 90 "parser.tab.h" /* yacc.c:1921  */
 };
 
 typedef union YYSTYPE YYSTYPE;

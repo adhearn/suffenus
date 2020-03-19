@@ -7,14 +7,16 @@
 %}
 
 %%
-"=" { return EQUALS; }
-"," { return COMMA; }
-";" { return SEMI; }
-"(" { return LPAREN; }
-")" { return RPAREN; }
-"{" { return LBRACE; }
-"}" { return RBRACE; }
+"=" { return yytext[0]; }
+"," { return yytext[0]; }
+";" { return yytext[0]; }
+"(" { return yytext[0]; }
+")" { return yytext[0]; }
+"{" { return yytext[0]; }
+"}" { return yytext[0]; }
 "return" { return RETURN; }
+"if" { return IF; }
+"else" { return ELSE; }
 
 "+" { yylval.op = Op_add; return BINOP; }
 "-" { yylval.op = Op_sub; return BINOP; }

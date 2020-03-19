@@ -11,6 +11,9 @@ PARSER=parser.tab.c
 
 all: compiler
 
+test: compiler interp.py test.py
+	python3 test.py
+
 compiler: $(SRC_FILES) $(LEXER_GEN_SRC) $(PARSER_GEN_SRC)
 	bison -vd $(PARSER_GEN_SRC)
 	flex -o  $(LEXER) $(LEXER_GEN_SRC)
