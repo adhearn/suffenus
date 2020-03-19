@@ -38,6 +38,7 @@ extern int yylineno;
 
 %start program
 %token                  RELOP UNOP BINOP
+%token                  EQOP
 %token                  ID
 %token                  INTEGER
 %token                  NEWLINE
@@ -47,21 +48,18 @@ extern int yylineno;
 
 %type   <program>       program
 %type   <integer>       INTEGER
-%type   <op>            RELOP BINOP UNOP
+%type   <op>            RELOP BINOP UNOP EQOP
 %type   <block>         top_level_block block compound_statement
 %type   <block_element> top_level_block_element block_element
 %type   <statement>     statement
-%type   <declaration>   declaration
+%type   <declaration>   declaration declaration_specifier
 %type   <type>          type
 %type   <str>           ID
 %type   <function>      function
-%type   <expr>          expr expr_statement
+%type   <list>          argument_expr_list declaration_specifier_list
+%type   <expr>          expr expr_statement primary_expr postfix_expr unary_expr relational_expr additive_expr multiplicative_expr assignment_expr equality_expr
 %type   <jump>          jump_statement
 %type   <selection>     selection_statement
-
-%left EQUALS
-%left RELOP
-%left BINOP
 
 %%
 
@@ -92,12 +90,28 @@ top_level_block_element:
                 ;
 
 declaration:
-                type ID ';' {
+                declaration_specifier ';' {
+                    $$ = $1;
+                }
+        ;
+
+declaration_specifier:
+                type ID {
                     struct Identifier *identifier = identifier_new($2, $1);
                     struct Declaration *decl = declaration_new($1, identifier);
                     $$ = decl;
                 }
                 ;
+
+declaration_specifier_list:
+                declaration_specifier {
+                    $$ = g_list_append(NULL, $1);
+                }
+        |
+                declaration_specifier_list ',' declaration_specifier {
+                    $$ = g_list_append($1, $3);
+                }
+        ;
 
 block:
                 block block_element {
@@ -122,10 +136,18 @@ function:
                     struct Identifier *identifier = identifier_new($2, NULL);
                     type_make_fn_type($1);
                     identifier->type = $1;
-                    GList *params_list = NULL;
-                    struct Function *func = function_new($1, identifier, params_list, $6);
+                    struct Function *func = function_new($1, identifier, NULL, $6);
                     $$ = func;
                 }
+        |
+                type ID '(' declaration_specifier_list ')' '{' block '}' {
+                    struct Identifier *identifier = identifier_new($2, NULL);
+                    type_make_fn_type($1);
+                    identifier->type = $1;
+                    GList *params_list = $4;
+                    struct Function *func = function_new($1, identifier, params_list, $7);
+                    $$ = func;
+}
                 ;
 
 statement:
@@ -187,21 +209,7 @@ selection_statement:
                 }
                 ;
 
-expr:
-                expr BINOP expr {
-                    struct ExprOp *binop = expr_op_new($2, $1, $3);
-                    struct Expr *expr = expr_new(EXPR_BINOP);
-                    expr->op = binop;
-                    $$ = expr;
-                }
-        |
-                expr RELOP expr {
-                    struct ExprOp *relop = expr_op_new($2, $1, $3);
-                    struct Expr *expr = expr_new(EXPR_RELOP);
-                    expr->op = relop;
-                    $$ = expr;
-                }
-        |
+primary_expr:
                 ID {
                     struct Identifier *identifier = identifier_new($1, NULL);
                     struct ExprIdentifier *expr_identifier = expr_identifier_new(identifier);
@@ -217,15 +225,116 @@ expr:
                     expr->constant = expr_constant;
                     $$ = expr;
                 }
+                ;
+
+argument_expr_list:
+                assignment_expr {
+                    GList *expr_list = g_list_append(NULL, $1);
+                    $$ = expr_list;
+                }
         |
-                ID '=' expr {
+                argument_expr_list ',' assignment_expr {
+                    GList *expr_list = g_list_append($1, $3);
+                    $$ = expr_list;
+                }
+        ;
+
+postfix_expr:
+                primary_expr { $$ = $1; }
+        |
+                postfix_expr '(' ')' {
+                    struct ExprCall *call = expr_call_new($1, NULL);
+                    struct Expr *expr = expr_new(EXPR_CALL);
+                    expr->call = call;
+                    $$ = expr;
+                }
+        |
+                postfix_expr '(' argument_expr_list ')' {
+                    struct ExprCall *call = expr_call_new($1, $3);
+                    struct Expr *expr = expr_new(EXPR_CALL);
+                    expr->call = call;
+                    $$ = expr;
+                }
+        ;
+
+unary_expr:
+                postfix_expr { $$ = $1; }
+        ;
+
+multiplicative_expr:
+                unary_expr { $$ = $1; }
+        |
+                multiplicative_expr '*' unary_expr {
+                    struct ExprOp *binop = expr_op_new(Op_mul, $1, $3);
+                    struct Expr *expr = expr_new(EXPR_BINOP);
+                    expr->op = binop;
+                    $$ = expr;
+                }
+        |
+                multiplicative_expr '/' unary_expr {
+                    struct ExprOp *binop = expr_op_new(Op_div, $1, $3);
+                    struct Expr *expr = expr_new(EXPR_BINOP);
+                    expr->op = binop;
+                    $$ = expr;
+                }
+;
+
+
+additive_expr:
+                multiplicative_expr { $$ = $1; }
+        |
+                additive_expr '+' multiplicative_expr {
+                    struct ExprOp *binop = expr_op_new(Op_add, $1, $3);
+                    struct Expr *expr = expr_new(EXPR_BINOP);
+                    expr->op = binop;
+                    $$ = expr;
+                }
+        |
+                additive_expr '-' multiplicative_expr {
+                    struct ExprOp *binop = expr_op_new(Op_sub, $1, $3);
+                    struct Expr *expr = expr_new(EXPR_BINOP);
+                    expr->op = binop;
+                    $$ = expr;
+                }
+                ;
+
+relational_expr:
+                additive_expr { $$ = $1; }
+        |
+                relational_expr RELOP additive_expr {
+                    struct ExprOp *relop = expr_op_new($2, $1, $3);
+                    struct Expr *expr = expr_new(EXPR_RELOP);
+                    expr->op = relop;
+                    $$ = expr;
+                }
+        ;
+
+equality_expr:
+                relational_expr { $$ = $1; }
+        |
+                equality_expr EQOP relational_expr {
+                    struct ExprOp *relop = expr_op_new($2, $1, $3);
+                    struct Expr *expr = expr_new(EXPR_RELOP);
+                    expr->op = relop;
+                    $$ = expr;
+                }
+        ;
+
+assignment_expr:
+                equality_expr { $$ = $1; }
+        |
+                ID '=' assignment_expr {
                     struct Identifier *identifier = identifier_new($1, NULL);
                     struct ExprAssignment *assignment = expr_assignment_new(identifier, $3);
                     struct Expr *expr = expr_new(EXPR_ASSIGNMENT);
                     expr->assignment = assignment;
                     $$ = expr;
                 }
-                ;
+        ;
+
+expr:           assignment_expr { $$ = $1; }
+        ;
+
 type:
                 ID {
                     struct Type *type = type_new($1);

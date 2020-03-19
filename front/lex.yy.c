@@ -802,32 +802,32 @@ YY_RULE_SETUP
 case 11:
 YY_RULE_SETUP
 #line 21 "parser.l"
-{ yylval.op = Op_add; return BINOP; }
+{ return yytext[0]; }
 	YY_BREAK
 case 12:
 YY_RULE_SETUP
 #line 22 "parser.l"
-{ yylval.op = Op_sub; return BINOP; }
+{ return yytext[0]; }
 	YY_BREAK
 case 13:
 YY_RULE_SETUP
 #line 23 "parser.l"
-{ yylval.op = Op_mul; return BINOP; }
+{ return yytext[0]; }
 	YY_BREAK
 case 14:
 YY_RULE_SETUP
 #line 24 "parser.l"
-{ yylval.op = Op_div; return BINOP; }
+{ return yytext[0]; }
 	YY_BREAK
 case 15:
 YY_RULE_SETUP
 #line 26 "parser.l"
-{ yylval.op = Op_eq; return RELOP; }
+{ yylval.op = Op_eq; return EQOP; }
 	YY_BREAK
 case 16:
 YY_RULE_SETUP
 #line 27 "parser.l"
-{ yylval.op = Op_neq; return RELOP; }
+{ yylval.op = Op_neq; return EQOP; }
 	YY_BREAK
 case 17:
 YY_RULE_SETUP

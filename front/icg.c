@@ -10,16 +10,19 @@ void extend_quads(struct Quad *quad) {
     quads = g_list_append(quads, quad);
 }
 
+struct Address *label_new_named(char *name) {
+    struct Address *addr = address_new(ADDR_TYPE_LABEL);
+    addr->name = name;
+    return addr;
+}
+
 struct Address *label_new() {
     static int count = 0;
     char **label = malloc(sizeof(char *));
     check_mem(label);
     asprintf(label, "L%d", count);
     count++;
-
-    struct Address *addr = address_new(ADDR_TYPE_LABEL);
-    addr->name = *label;
-    return addr;
+    return label_new_named(*label);
 }
 
 struct Address *address_new(enum TACAddressType type) {
@@ -52,6 +55,9 @@ void address_print(struct Address *addr) {
         break;
     case (ADDR_TYPE_CONSTANT):
         printf("%d", addr->value);
+        break;
+    case (ADDR_TYPE_FUNC_PARAM):
+        printf("PARAM %d", addr->value);
         break;
     default:
         log_err("Invalid address type in address_print: %d\n", addr->type);
@@ -92,6 +98,13 @@ void quad_print(struct Quad *quad) {
         printf(" %s ", OP_NAMES[quad->op]);
         address_print(quad->arg2);
         break;
+    case (TAC_CALL):
+        address_print(quad->result);
+        printf(" = CALL ");
+        address_print(quad->arg1);
+        printf(" ");
+        address_print(quad->arg2);
+        break;
     case (TAC_COPY):
         address_print(quad->result);
         printf(" = ");
@@ -99,6 +112,10 @@ void quad_print(struct Quad *quad) {
         break;
     case (TAC_JUMP):
         printf("JUMP ");
+        address_print(quad->result);
+        break;
+    case (TAC_PARAM):
+        printf("PARAM ");
         address_print(quad->result);
         break;
     case (TAC_RETURN):
@@ -138,6 +155,46 @@ struct Quad *expr_assignment_generate_tac_quads_rvalue(struct ExprAssignment *as
     }
 }
 
+// We don't extend quads with the param quads we create in order to make a slightly more aesthetically pleasing
+// TAC output. It's unnecessary, but should make debugging the interpreter a bit easier, if nothing else.
+// However, it does mean that the call function has to be a bit more complicated.
+struct Quad *expr_generate_tac_quads_params(struct Expr *expr) {
+    struct Quad *expr_final = expr_generate_tac_quads_rvalue(expr);
+    struct Quad *param = quad_new(TAC_PARAM);
+    param->result = expr_final->result;
+    return param;
+}
+
+struct Quad *expr_call_generate_tac_quads_rvalue(struct ExprCall *call) {
+    // The ordering is a bit wonky here. We want to generate all the quads required to evaluate the params, then
+    // all the quads to identify the function. Then we actually add the param instructions, followed by the
+    // actual call instruction. Not strictly required, but should make debugging TAC by hand a bit easier.
+    struct Quad *function = expr_generate_tac_quads_rvalue(call->function);
+    int num_args = g_list_length(call->args);
+    struct Quad *params[num_args];
+    GList *args = call->args;
+    int i = 0;
+    while (args) {
+        struct Expr *arg = args->data;
+        struct Quad *param = expr_generate_tac_quads_params(arg);
+        params[i] = param;
+        args = args->next;
+        i++;
+    }
+
+    for (int i = 0; i < num_args; i++) {
+        extend_quads(params[i]);
+    }
+
+    struct Quad *quad_call = quad_new(TAC_CALL);
+    quad_call->arg1 = function->result;
+    struct Address *addr_num_params = address_zero_new();
+    addr_num_params->value = num_args;
+    quad_call->arg2 = addr_num_params;
+    quad_call->result = address_temp_new();
+    extend_quads(quad_call);
+    return quad_call;
+}
 
 struct Quad *expr_constant_generate_tac_quads_rvalue(struct ExprConstant* constant) {
     struct Address *rhs = address_new(ADDR_TYPE_CONSTANT);
@@ -181,6 +238,9 @@ struct Quad *expr_generate_tac_quads_rvalue(struct Expr *expr) {
     switch (expr->type) {
     case (EXPR_ASSIGNMENT):
         quad = expr_assignment_generate_tac_quads_rvalue(expr->assignment);
+        break;
+    case (EXPR_CALL):
+        quad = expr_call_generate_tac_quads_rvalue(expr->call);
         break;
     case (EXPR_CONSTANT):
         quad = expr_constant_generate_tac_quads_rvalue(expr->constant);
@@ -232,6 +292,12 @@ struct Quad *expr_identifier_generate_tac_quads_jump(struct ExprIdentifier *iden
     return address_generate_conditional_jump(identifier_address, true_label, false_label);
 }
 
+struct Quad *expr_call_generate_tac_quads_jump(struct ExprCall *call, struct Address *true_label, struct Address *false_label, struct Address *next_label) {
+    struct Quad *call_quad = expr_call_generate_tac_quads_rvalue(call);
+    struct Address *result_addr = call_quad->result;
+    return address_generate_conditional_jump(result_addr, true_label, false_label);
+}
+
 struct Quad *expr_binop_generate_tac_quads_jump(struct ExprOp *op, struct Address *true_label, struct Address *false_label, struct Address *next_label) {
     struct Quad *binop_quad = expr_op_generate_tac_quads_rvalue(op);
     struct Address *binop_result = binop_quad->result;
@@ -258,6 +324,9 @@ struct Quad *expr_generate_tac_quads_jump(struct Expr *expr, struct Address *tru
     switch (expr->type) {
     case (EXPR_ASSIGNMENT):
         quad = expr_assignment_generate_tac_quads_jump(expr->assignment, true_label, false_label, next_label);
+        break;
+    case (EXPR_CALL):
+        quad = expr_call_generate_tac_quads_jump(expr->call, true_label, false_label, next_label);
         break;
     case (EXPR_CONSTANT):
         quad = expr_constant_generate_tac_quads_jump(expr->constant, true_label, false_label, next_label);
@@ -356,12 +425,35 @@ struct Quad *statement_generate_tac_quads(struct Statement* stmt, struct Address
 }
 
 struct Quad *function_generate_tac_quads(struct Function *func) {
-    struct Address *label = label_new();
+    struct Address *label = label_new_named(func->name->id);
     struct Quad *function_start_noop = quad_new(TAC_NO_OP);
     quad_add_label(function_start_noop, label);
     extend_quads(function_start_noop);
 
-    // TODO: generate quads for function params
+    GList *args = func->param_declarations;
+    int i = 0;
+    while (args) {
+        // Create address for the param name
+        struct Identifier *arg = ((struct Declaration *)args->data)->id;
+        struct Address *arg_addr = address_new(ADDR_TYPE_NAME);
+        arg_addr->name = arg->id;
+
+        // Create Address for the param itself
+        struct Address *param_addr = address_new(ADDR_TYPE_FUNC_PARAM);
+        param_addr->value = i;
+
+        // Create quad to assign the param to the name
+        struct Quad *quad = quad_new(TAC_COPY);
+        quad->result = arg_addr;
+        quad->arg1 = param_addr;
+
+        // Add it to the quads list
+        extend_quads(quad);
+
+        // Update loop variables
+        i++;
+        args = args->next;
+    }
 
     block_generate_tac_quads(func->body);
 

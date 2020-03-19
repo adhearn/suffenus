@@ -10,12 +10,10 @@ enum TACInstruction {
     TAC_BINOP,
     TAC_COPY,
     TAC_JUMP,
-    // TAC_CODITIONAL_NO_OP,
     TAC_CONDITIONAL,
-    // TAC_PARAM,
-    // TAC_CALL,
+    TAC_PARAM,
+    TAC_CALL,
     TAC_RETURN,
-    // TAC_INDEXED_COPY,
 };
 
 enum TACAddressType {
@@ -23,14 +21,14 @@ enum TACAddressType {
     ADDR_TYPE_CONSTANT,
     ADDR_TYPE_TEMP,
     ADDR_TYPE_LABEL,
-    // ADDR_TYPE_FUNC_PARAM
+    ADDR_TYPE_FUNC_PARAM
 };
 
 struct Address {
     enum TACAddressType type;
     union {
-        int value;
-        char *name;
+        int value; // The value for a constant, or the param position for params
+        char *name; // The label or variable name for labels, names, and temps
     };
 };
 

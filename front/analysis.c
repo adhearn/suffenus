@@ -25,6 +25,13 @@ void expr_build_symbol_table(struct Expr *expr, struct SymbolTable *st) {
         identifier_validate_declared(expr->assignment->lhs, st, &expr->assignment->lhs);
         expr_build_symbol_table(expr->assignment->rhs, st);
         break;
+    case (EXPR_CALL):
+        // The order in which these are evaluated is actually undefined in the standard. Becasue they're
+        // exprs, though, they can't bind new variables, so we shouldn't have any issues with building
+        // the symbol table.
+        g_list_foreach(expr->call->args, (GFunc)expr_build_symbol_table, (gpointer)st);
+        expr_build_symbol_table(expr->call->function, st);
+        break;
     case (EXPR_CONSTANT):
         break;
     case (EXPR_IDENTIFIER):
@@ -52,9 +59,11 @@ void statement_jump_build_symbol_table(struct StatementJump *jump, struct Symbol
 
 void statement_build_symbol_table(struct Statement *statement, struct SymbolTable *st) {
     switch(statement->type) {
-    case (STMT_TYPE_COMPOUND):
-        block_build_symbol_table(statement->compound, st);
+    case (STMT_TYPE_COMPOUND): {
+        struct SymbolTable *inner_st = symbol_table_new(st);
+        block_build_symbol_table(statement->compound, inner_st);
         break;
+    }
     case (STMT_TYPE_EXPR):
         expr_build_symbol_table(statement->expr, st);
         break;
@@ -94,12 +103,11 @@ void declaration_build_symbol_table(struct Declaration *declaration, struct Symb
 }
 
 void function_build_symbol_table(struct Function *func, struct SymbolTable *st) {
-    // Functions are a somewhat complicated case. We need to add the function name to the symbol
-    // table, then recur on the block that is the body, passing in the outer symbol table as
-    // a parent.
     symbol_table_extend(st, func->name);
+    struct SymbolTable *body_st = symbol_table_new(st);
+    g_list_foreach(func->param_declarations, (GFunc)declaration_build_symbol_table, (gpointer)body_st);
     struct Block *body = func->body;
-    block_build_symbol_table(body, st);
+    block_build_symbol_table(body, body_st);
 }
 
 void block_element_build_symbol_table(void *elt, void *untyped_st) {
@@ -121,13 +129,13 @@ void block_element_build_symbol_table(void *elt, void *untyped_st) {
     }
 }
 
-void block_build_symbol_table(struct Block *block, struct SymbolTable *parent) {
-    struct SymbolTable *st = symbol_table_new(parent);
+void block_build_symbol_table(struct Block *block, struct SymbolTable *st) {
     block->st = st;
     g_list_foreach(block->block_elements, (GFunc)block_element_build_symbol_table, (gpointer *)st);
 }
 
 gboolean build_symbol_table(struct Program *prog) {
-    block_build_symbol_table(prog->top_level_block, NULL);
+    struct SymbolTable *st = symbol_table_new(NULL);
+    block_build_symbol_table(prog->top_level_block, st);
     return SYMBOL_TABLE_ERROR;
 }

@@ -16,7 +16,7 @@ enum NodeType ast_node_type(void *ast_node) {
 }
 
 // Reverse lookup for op names, useful for printing
-char *OP_NAMES[] = { "+", "-", "*", "/", "=", "!=", "<", ">", "<=", ">=" };
+char *OP_NAMES[] = { "+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">=" };
 
 struct Type *type_new(char *type) {
     struct Type *t = malloc(sizeof(struct Type));
@@ -97,6 +97,57 @@ void declaration_free(struct Declaration *decl) {
 /*     printf("Declaration: %s %s\n", decl->type->type, decl->id->id); */
 /* } */
 
+struct ExprAssignment *expr_assignment_new(struct Identifier *lhs, struct Expr *rhs) {
+    struct ExprAssignment *assignment = malloc(sizeof(struct ExprAssignment));
+    check_mem(assignment);
+    assignment->lhs = lhs;
+    assignment->rhs = rhs;
+    return assignment;
+}
+
+void expr_assignment_free(struct ExprAssignment *assignment) {
+    identifier_free(assignment->lhs);
+    expr_free(assignment->rhs);
+    free(assignment);
+}
+
+struct ExprCall *expr_call_new(struct Expr *function, GList *args) {
+    struct ExprCall *call = malloc(sizeof(struct ExprCall));
+    check_mem(call);
+    call->function = function;
+    call->args = args;
+    return call;
+}
+
+void expr_call_free(struct ExprCall *call) {
+    expr_free(call->function);
+    g_list_foreach(call->args, (GFunc)expr_free, NULL);
+    free(call);
+}
+
+struct ExprConstant *expr_constant_new(struct Constant *constant) {
+    struct ExprConstant *expr_constant = malloc(sizeof(struct ExprConstant));
+    check_mem(expr_constant);
+    expr_constant->constant = constant;
+    return expr_constant;
+}
+
+void expr_constant_free(struct ExprConstant *expr) {
+    free(expr->constant);
+    free(expr);
+}
+
+struct ExprIdentifier *expr_identifier_new(struct Identifier *id) {
+    struct ExprIdentifier *expr_id = malloc(sizeof(struct ExprIdentifier));
+    check_mem(expr_id);
+    expr_id->id = id;
+    return expr_id;
+}
+
+void expr_identifier_free(struct ExprIdentifier *expr) {
+    free(expr->id);
+    free(expr);
+}
 
 struct ExprOp *expr_op_new(enum Op op, struct Expr *arg1, struct Expr *arg2) {
     struct ExprOp *expr_op = malloc(sizeof(struct ExprOp));
@@ -113,45 +164,7 @@ void expr_op_free(struct ExprOp *expr) {
     free(expr);
 }
 
-struct ExprIdentifier *expr_identifier_new(struct Identifier *id) {
-    struct ExprIdentifier *expr_id = malloc(sizeof(struct ExprIdentifier));
-    check_mem(expr_id);
-    expr_id->id = id;
-    return expr_id;
-}
-
-void expr_identifier_free(struct ExprIdentifier *expr) {
-    free(expr->id);
-    free(expr);
-}
-
-struct ExprConstant *expr_constant_new(struct Constant *constant) {
-    struct ExprConstant *expr_constant = malloc(sizeof(struct ExprConstant));
-    check_mem(expr_constant);
-    expr_constant->constant = constant;
-    return expr_constant;
-}
-
-void expr_constant_free(struct ExprConstant *expr) {
-    free(expr->constant);
-    free(expr);
-}
-
-struct ExprAssignment *expr_assignment_new(struct Identifier *lhs, struct Expr *rhs) {
-    struct ExprAssignment *assignment = malloc(sizeof(struct ExprAssignment));
-    check_mem(assignment);
-    assignment->lhs = lhs;
-    assignment->rhs = rhs;
-    return assignment;
-}
-
-void expr_assignment_free(struct ExprAssignment *assignment) {
-    identifier_free(assignment->lhs);
-    expr_free(assignment->rhs);
-    free(assignment);
-}
-
-struct Expr *expr_new(enum Expr_type type) {
+struct Expr *expr_new(enum ExprType type) {
     struct Expr *expr = malloc(sizeof(struct Expr));
     check_mem(expr);
     expr->node_type = NODE_TYPE_EXPR;
@@ -163,6 +176,10 @@ void expr_free(struct Expr *expr) {
     switch (expr->type) {
     case (EXPR_ASSIGNMENT):
         expr_assignment_free(expr->assignment);
+        break;
+    case (EXPR_CALL):
+        expr_free(expr->call->function);
+        g_list_foreach(expr->call->args, (GFunc)expr_free, NULL);
         break;
     case (EXPR_CONSTANT):
         expr_constant_free(expr->constant);

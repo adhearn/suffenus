@@ -52,13 +52,13 @@ extern int yydebug;
     RELOP = 258,
     UNOP = 259,
     BINOP = 260,
-    ID = 261,
-    INTEGER = 262,
-    NEWLINE = 263,
-    RETURN = 264,
-    IF = 265,
-    ELSE = 266,
-    EQUALS = 267
+    EQOP = 261,
+    ID = 262,
+    INTEGER = 263,
+    NEWLINE = 264,
+    RETURN = 265,
+    IF = 266,
+    ELSE = 267
   };
 #endif
 

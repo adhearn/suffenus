@@ -36,14 +36,6 @@ enum NodeType {
     NODE_TYPE_PROGRAM,
 };
 
-enum Expr_type {
-    EXPR_BINOP,
-    EXPR_RELOP,
-    EXPR_CONSTANT,
-    EXPR_IDENTIFIER,
-    EXPR_ASSIGNMENT
-};
-
 enum StatementType {
     STMT_TYPE_COMPOUND,
     STMT_TYPE_EXPR,
@@ -73,18 +65,13 @@ struct Declaration {
     struct Identifier *id;
 };
 
-struct ExprOp {
-    enum Op op;
-    struct Expr *arg1;
-    struct Expr *arg2;
-};
-
-struct ExprIdentifier {
-    struct Identifier *id;
-};
-
-struct ExprConstant {
-    struct Constant *constant;
+enum ExprType {
+    EXPR_ASSIGNMENT,
+    EXPR_BINOP,
+    EXPR_CALL,
+    EXPR_CONSTANT,
+    EXPR_IDENTIFIER,
+    EXPR_RELOP,
 };
 
 struct ExprAssignment {
@@ -92,15 +79,34 @@ struct ExprAssignment {
     struct Expr *rhs;
 };
 
+struct ExprCall {
+    struct Expr *function;
+    GList *args;
+};
+
+struct ExprConstant {
+    struct Constant *constant;
+};
+
+struct ExprIdentifier {
+    struct Identifier *id;
+};
+
+struct ExprOp {
+    enum Op op;
+    struct Expr *arg1;
+    struct Expr *arg2;
+};
+
 struct Expr {
     enum NodeType node_type;
-    enum Expr_type type;
+    enum ExprType type;
     union {
-        struct ExprOp *op;
-        struct ExprIdentifier *id;
-        struct ExprConstant *constant;
         struct ExprAssignment *assignment;
-        struct Expr *ret;
+        struct ExprCall *call;
+        struct ExprConstant *constant;
+        struct ExprIdentifier *id;
+        struct ExprOp *op;
     };
 };
 
@@ -173,19 +179,21 @@ struct Declaration *declaration_new(struct Type *type, struct Identifier *id);
 void declaration_free(struct Declaration *declaration);
 // void declaration_print(struct Declaration *declaration);
 
+
+struct ExprAssignment *expr_assignment_new(struct Identifier *lhs, struct Expr *rhs);
+struct ExprCall *expr_call_new(struct Expr *function, GList *args);
+struct ExprConstant *expr_constant_new(struct Constant *constant);
+struct ExprIdentifier *expr_identifier_new(struct Identifier *id);
+struct ExprOp *expr_op_new(enum Op op, struct Expr *arg1, struct Expr *arg2);
+struct Expr *expr_new(enum ExprType type);
+void expr_free(struct Expr *expr);
+
 struct StatementJump *statement_jump_new();
 struct StatementSelection *statement_selection_new();
 void statement_jump_free();
 void statement_selection_free();
 struct Statement *statement_new(enum StatementType type);
 void statement_free(struct Statement *statement);
-
-struct ExprOp *expr_op_new(enum Op op, struct Expr *arg1, struct Expr *arg2);
-struct ExprIdentifier *expr_identifier_new(struct Identifier *id);
-struct ExprConstant *expr_constant_new(struct Constant *constant);
-struct ExprAssignment *expr_assignment_new(struct Identifier *lhs, struct Expr *rhs);
-struct Expr *expr_new(enum Expr_type type);
-void expr_free(struct Expr *expr);
 
 struct Block *block_new(GList *block_elements, struct SymbolTable *st);
 struct Block *block_extend(struct Block *block, void *elt);

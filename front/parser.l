@@ -18,13 +18,13 @@
 "if" { return IF; }
 "else" { return ELSE; }
 
-"+" { yylval.op = Op_add; return BINOP; }
-"-" { yylval.op = Op_sub; return BINOP; }
-"*" { yylval.op = Op_mul; return BINOP; }
-"/" { yylval.op = Op_div; return BINOP; }
+"+" { return yytext[0]; }
+"-" { return yytext[0]; }
+"*" { return yytext[0]; }
+"/" { return yytext[0]; }
 
-"==" { yylval.op = Op_eq; return RELOP; }
-"!=" { yylval.op = Op_neq; return RELOP; }
+"==" { yylval.op = Op_eq; return EQOP; }
+"!=" { yylval.op = Op_neq; return EQOP; }
 "<" { yylval.op = Op_lt; return RELOP; }
 "<=" { yylval.op = Op_lte; return RELOP; }
 ">" { yylval.op = Op_gt; return RELOP; }

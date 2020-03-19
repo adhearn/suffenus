@@ -1,13 +1,15 @@
 import os.path
 import subprocess
 
-from interp import tac_eval
+from interp import Interpreter
 
 tests = [
     ("add", 3),
     ("sub_vars_declared_global", 1),
     ("single_if", 42),
     ("if_else", 23),
+    ("func_simple", 5),
+    ("fact5", 120),
 ]
 testDir = "tests"
 testExtension = ".c"
@@ -24,7 +26,7 @@ def run_test(filename):
     with open(compiler_output_filename) as tac_file:
         tac = tac_file.read()
 
-    res = tac_eval(tac)
+    res = Interpreter.eval(tac)
     return res
 
 if __name__ == "__main__":
