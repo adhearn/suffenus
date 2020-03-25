@@ -23,4 +23,5 @@ clean:
 	rm -f $(PARSER)
 	rm -f $(LEXER)
 	rm -f parser.tab.*
+	rm -f parser.output
 	rm -f compiler

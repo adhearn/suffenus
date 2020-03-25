@@ -446,7 +446,10 @@ postfix_expr:
                 }
         |
                 postfix_expr '[' expr ']' {
-
+                    struct ExprIndexed *indexed = expr_indexed_new($1, $3);
+                    struct Expr *expr = expr_new(EXPR_INDEXED);
+                    expr->indexed = indexed;
+                    $$ = expr;
                 }
         ;
 
@@ -549,24 +552,22 @@ constant_expr:
 assignment_expr:
                 equality_expr { $$ = $1; }
         |
-                identifier '=' assignment_expr {
-                    struct ExprAssignment *assignment = expr_assignment_new(LVALUE_IDENTIFIER, $1, $3);
+                postfix_expr '=' assignment_expr {
+                    struct Expr *postfix = $1;
+                    struct ExprAssignment *assignment;
+
+                    if (postfix->type == EXPR_INDEXED) {
+                        assignment = expr_assignment_new(LVALUE_INDEXED, postfix->indexed, $3);
+                    } else if (postfix->type == EXPR_IDENTIFIER) {
+                        struct Identifier *identifier = postfix->id->id;
+                        assignment = expr_assignment_new(LVALUE_IDENTIFIER, identifier, $3);
+                    } else {
+                        log_err("Only Identifiers and indexed Expressions can appear on the LHS of an assignment, you tried to put type %d", postfix->type);
+                        YYABORT;
+                    }
                     struct Expr *expr = expr_new(EXPR_ASSIGNMENT);
                     expr->assignment = assignment;
                     $$ = expr;
-                }
-        |
-                postfix_expr '=' assignment_expr {
-                    struct Expr *postfix = $1;
-                    if (postfix->type != EXPR_INDEXED) {
-                        log_err("Only Identifiers and indexed Expressions can appear on the LHS of an assignment");
-                        YYABORT;
-                    } else {
-                        struct ExprAssignment *assignment = expr_assignment_new(LVALUE_INDEXED, $1, $3);
-                        struct Expr *expr = expr_new(EXPR_ASSIGNMENT);
-                        expr->assignment = assignment;
-                        $$ = expr;
-                    }
                 }
         ;
 

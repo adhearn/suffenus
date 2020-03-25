@@ -45,7 +45,7 @@
 ">=" { yylval.op = Op_gte; return RELOP; }
 
 [0-9]+ { yylval.integer = atoi(yytext); return INTEGER;}
-[[:alpha:]]([[:alnum:]])* { yylval.str = strdup(yytext);  return ID; }
+[[:alpha:]]([[:alnum:]_])* { yylval.str = strdup(yytext);  return ID; }
 [\n]+ { /* return NEWLINE; */ }
 [ \t]+ { /* ignore whitespace */ }
 . { printf("bad input character: '%s' at line %d\n", yytext, yylineno); }

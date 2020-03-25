@@ -5,6 +5,7 @@ from interp import Interpreter
 
 tests = [
     ("add", 3),
+    ("add_initializer", 3),
     ("sub_vars_declared_global", 1),
     ("single_if", 42),
     ("if_else", 23),
@@ -23,9 +24,9 @@ tests = [
     ("switch_break", 42),
     ("switch_no_break", 42),
     ("switch_default", 23),
-    ("indexed_lhs_simple", 0),
-    # ("array_simple", 40),
-    # ("array_arg", 40),
+    ("indexed_lhs_simple", 1),
+    ("array_simple", 40),
+    ("array_arg", 40),
 ]
 testDir = "tests"
 testExtension = ".c"

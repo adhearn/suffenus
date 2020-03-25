@@ -164,6 +164,12 @@ void quad_print(struct Quad *quad) {
         address_print(quad->result);
         break;
     case (TAC_COPY_INDEXED_RHS):
+        printf("RINDEXED ");
+        address_print(quad->result);
+        printf(" ");
+        address_print(quad->arg1);
+        printf(" ");
+        address_print(quad->arg2);
         break;
     }
     printf("\n");
@@ -220,6 +226,7 @@ struct Quad *expr_assignment_indexed_generate_tac_quads_rvalue(struct ExprIndexe
     copy->result = rhs_result->result;
     copy->arg1 = index_base(lhs);
     copy->arg2 = offset->result;
+    extend_quads(copy);
     return copy;
 }
 
@@ -303,10 +310,11 @@ struct Quad *expr_indexed_generate_tac_quads_rvalue(struct ExprIndexed *indexed)
     struct Quad *expr_quad = expr_generate_tac_quads_rvalue(indexed->expr);
     struct Quad *index_quad = expr_generate_tac_quads_rvalue(indexed->index);
     struct Address *tmp = address_temp_new();
-    struct Quad *quad = quad_new(TAC_COPY_INDEXED_LHS);
+    struct Quad *quad = quad_new(TAC_COPY_INDEXED_RHS);
     quad->arg1 = expr_quad->result;
     quad->arg2 = index_quad->result;
     quad->result = tmp;
+    extend_quads(quad);
     return quad;
 }
 
@@ -872,7 +880,7 @@ struct Quad *block_element_generate_tac_quads(void *elt, struct Address *loop_st
         quad = function_generate_tac_quads((struct Function *)elt);
         break;
     case NODE_TYPE_DECLARATION:
-        // quad = declaration_generate_tac_quads((struct Declaration *)elt);
+        quad = declaration_generate_tac_quads((struct Declaration *)elt);
         break;
     case NODE_TYPE_STATEMENT: {
         struct Address *rejoin_label = label_new();

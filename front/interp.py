@@ -8,9 +8,11 @@ CALL_TOKEN = "CALL"
 CASE_TOKEN = "CASE"
 CONDITIONAL_TOKEN = "IF"
 JUMP_TOKEN = "JUMP"
+LINDEXED_TOKEN = "LINDEXED"
 NO_OP_TOKEN = "<NO OP>"
 PARAM_TOKEN = "PARAM"
 RETURN_TOKEN = "RETURN"
+RINDEXED_TOKEN = "RINDEXED"
 
 TAC_BINOP = "BINOP"
 TAC_CALL = "CALL"
@@ -18,9 +20,11 @@ TAC_CASE = "CASE"
 TAC_COPY = "COPY"
 TAC_CONDITIONAL = "IF"
 TAC_JUMP = "JUMP"
+TAC_LINDEXED_COPY = "LINDEXED"
 TAC_NO_OP = "NOOP"
 TAC_PARAM = "PARAM"
 TAC_RETURN = "RETURN"
+TAC_RINDEXED_COPY = "RINDEXED"
 TAC_UNOP = "UNOP"
 
 
@@ -39,10 +43,14 @@ class Quad:
             return Conditional(parts)
         elif parts[0] == JUMP_TOKEN:
             return Jump(parts)
+        elif parts[0] == LINDEXED_TOKEN:
+            return LeftIndexedCopy(parts)
         elif parts[0] == PARAM_TOKEN:
             return Param(parts)
         elif parts[0] == RETURN_TOKEN:
             return Return(parts)
+        elif parts[0] == RINDEXED_TOKEN:
+            return RightIndexedCopy(parts)
         else:
             if CALL_TOKEN in parts:
                 return Call(parts)
@@ -122,6 +130,13 @@ class Jump(Quad):
         self.type = TAC_JUMP
         self.target = self.parse_label(parts[1])
 
+class LeftIndexedCopy(Quad):
+    def __init__(self, parts):
+        super().__init__(parts)
+        self.type = TAC_LINDEXED_COPY
+        self.lhs = self.parse_address(parts[1])
+        self.index = self.parse_address(parts[2])
+        self.rhs = self.parse_address(parts[3])
 
 class NoOp(Quad):
     def __init__(self, parts):
@@ -143,6 +158,18 @@ class Return(Quad):
         self.address = self.parse_address(parts[1])
 
 
+class RightIndexedCopy(Quad):
+    def __init__(self, parts):
+        super().__init__(parts)
+        self.type = TAC_RINDEXED_COPY
+        self.lhs = parts[1]
+        self.rhs = self.parse_address(parts[2])
+        self.index = self.parse_address(parts[3])
+
+    def __str__(self):
+        return "<RIndexCopy {} = {}[{}]>".format(self.lhs, self.rhs, self.index)
+
+
 class Environment:
     def __init__(self, parent=None):
         if parent:
@@ -150,12 +177,17 @@ class Environment:
         else:
             self.env = {}
 
+    def primitive_result(self, obj):
+        return type(obj) == int or type(obj) == list
+
     def lookup(self, key, recursive=True):
         if not recursive:
             return self.env.get(key)
         else:
             res = self.env.get(key)
-            if res is not None:
+            if self.primitive_result(res):
+                return res
+            elif res is not None:
                 return self.lookup(res, recursive=recursive)
             else:
                 return key
@@ -236,6 +268,21 @@ class Interpreter:
                 self.next_index += 1
             elif quad.type == TAC_JUMP:
                 self.next_index = self.label_index(quad.target)
+            elif quad.type == TAC_LINDEXED_COPY:
+                ls = self.env.lookup(quad.lhs)
+                index = self.env.lookup(quad.index)
+                rhs = self.env.lookup(quad.rhs)
+                if ls and type(ls) == list:
+                    if len(ls) <= index:
+                        bigger_ls = [None for _ in range(index + 1)]
+                        for i in range(len(ls)):
+                            bigger_ls[i] = ls[i]
+                        ls = bigger_ls
+                else:
+                    ls = [None for _ in range(index + 1)]
+                ls[index] = rhs
+                self.env = self.env.extend(quad.lhs, ls)
+                self.next_index += 1
             elif quad.type == TAC_NO_OP:
                 self.next_index += 1
             elif quad.type == TAC_PARAM:
@@ -249,6 +296,11 @@ class Interpreter:
                     self.env = self.env.extend(return_value_var, res)
                 else:
                     return res
+            elif quad.type == TAC_RINDEXED_COPY:
+                ls = self.env.lookup(quad.rhs)
+                index = self.env.lookup(quad.index)
+                self.env = self.env.extend(quad.lhs, ls[index])
+                self.next_index += 1
             else:
                 print("Quad type not handled: ", quad.type)
                 return
