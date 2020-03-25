@@ -36,14 +36,6 @@ enum NodeType {
     NODE_TYPE_PROGRAM,
 };
 
-enum StatementType {
-    STMT_TYPE_COMPOUND,
-    STMT_TYPE_EXPR,
-    STMT_TYPE_JUMP,
-    STMT_TYPE_RETURN,
-    STMT_TYPE_SELECTION
-};
-
 struct Type {
     char *type;
 };
@@ -59,10 +51,68 @@ struct Constant {
     int val;
 };
 
+enum StorageClassSpecifier {
+    SPEC_TYPEDEF,
+    SPEC_EXTERN,
+    SPEC_STATIC,
+    SPEC_AUTO,
+    SPEC_REGISTER,
+};
+
+enum TypeSpecifier {
+    TYPE_VOID,
+    TYPE_CHAR,
+    TYPE_SHORT,
+    TYPE_INT,
+    TYPE_LONG,
+    TYPE_FLOAT,
+    TYPE_DOUBLE,
+    TYPE_SIGNED,
+    TYPE_UNSIGNED,
+    TYPE_BOOL,
+    TYPE_COMPLEX,
+    TYPE_STRUCT,
+    TYPE_UNION,
+    TYPE_ENUM,
+    TYPE_TYPEDEF
+};
+
+struct StructUnionSpecifier {
+    enum TypeSpecifier struct_or_union; // Should only be TYPE_STRUCT or TYPE_UNION
+    GList *declarations;
+};
+
+struct EnumSpecifier {
+    GList *enumerators;
+};
+
+enum TypeQualifier {
+    QUALIFIER_CONSTANT,
+    QUALIFIER_RESTRICT,
+    QUALIFIER_VOLATILE,
+};
+
+enum DeclaratorType {
+    DECLARATOR_IDENTIFIER,
+    DECLARATOR_ARRAY,
+    DECLARATOR_FUNCTION,
+};
+
+struct Declarator {
+    enum DeclaratorType type;
+    struct Declarator *sub_declarator;
+    struct Expr *initializer;
+    union {
+        struct Identifier *identifier;
+        GList *param_or_identifier_list;
+        struct Expr *array_size_expr;
+    };
+};
+
 struct Declaration {
     enum NodeType node_type;
-    struct Type *type;
-    struct Identifier *id;
+    GList *specifiers;
+    GList *declarators;
 };
 
 enum ExprType {
@@ -71,11 +121,18 @@ enum ExprType {
     EXPR_CALL,
     EXPR_CONSTANT,
     EXPR_IDENTIFIER,
+    EXPR_INDEXED,
     EXPR_RELOP,
 };
 
+enum LValueType {
+    LVALUE_IDENTIFIER,
+    LVALUE_INDEXED,
+};
+
 struct ExprAssignment {
-    struct Identifier *lhs;
+    enum LValueType lvalue_type;
+    void *lhs; // Should be either an identifier or an ExprIndexed
     struct Expr *rhs;
 };
 
@@ -92,6 +149,11 @@ struct ExprIdentifier {
     struct Identifier *id;
 };
 
+struct ExprIndexed {
+    struct Expr *expr;
+    struct Expr *index;
+};
+
 struct ExprOp {
     enum Op op;
     struct Expr *arg1;
@@ -106,15 +168,28 @@ struct Expr {
         struct ExprCall *call;
         struct ExprConstant *constant;
         struct ExprIdentifier *id;
+        struct ExprIndexed *indexed;
         struct ExprOp *op;
     };
 };
 
+enum StatementType {
+    STMT_TYPE_COMPOUND,
+    STMT_TYPE_EXPR,
+    STMT_TYPE_FOR,
+    STMT_TYPE_JUMP,
+    STMT_TYPE_LABELED,
+    STMT_TYPE_RETURN,
+    STMT_TYPE_SELECTION,
+    STMT_TYPE_SWITCH,
+    STMT_TYPE_WHILE,
+};
 
-struct StatementSelection {
+struct StatementFor {
+    struct Expr *init;
     struct Expr *test;
-    struct Statement *conseq;
-    struct Statement *alt;
+    struct Expr *update;
+    struct Statement *body;
 };
 
 enum StatementJumpType {
@@ -132,6 +207,37 @@ struct StatementJump {
     };
 };
 
+enum StatementLabeledType {
+    LABELED_CASE,
+    LABELED_DEFAULT,
+    LABELED_LABEL,
+};
+
+struct StatementLabeled {
+    enum StatementLabeledType type;
+    union {
+        struct Identifier *label;
+        struct Expr *test;
+    };
+    struct Statement *statement;
+};
+
+struct StatementSelection {
+    struct Expr *test;
+    struct Statement *conseq;
+    struct Statement *alt;
+};
+
+struct StatementSwitch {
+    struct Expr *test;
+    struct Statement *body;
+};
+
+struct StatementWhile {
+    struct Expr *test;
+    struct Statement *body;
+};
+
 struct Statement {
     enum NodeType node_type;
     enum StatementType type;
@@ -140,8 +246,12 @@ struct Statement {
         /* struct Statement_assignment *assignment; */
         struct Block *compound;
         struct Expr *expr;
+        struct StatementFor *for_loop;
         struct StatementJump *jump;
+        struct StatementLabeled *labeled;
         struct StatementSelection *selection;
+        struct StatementSwitch *switch_statement;
+        struct StatementWhile *while_loop;
     };
 };
 
@@ -153,10 +263,9 @@ struct Block {
 
 struct Function {
     enum NodeType node_type;
-    struct Type *return_type;
-    struct Identifier *name;
-    GList *param_declarations;
+    struct Declarator *declarator;
     struct Block *body;
+    GList *specifiers;
 };
 
 struct Program {
@@ -175,40 +284,49 @@ void identifier_free(struct Identifier *identifier);
 struct Constant *constant_new(int constant);
 void constant_free(struct Constant *constant);
 
-struct Declaration *declaration_new(struct Type *type, struct Identifier *id);
+struct Declarator *declarator_new(enum DeclaratorType type, struct Declarator *sub_declarator, void *other);
+struct Identifier *declarator_identifier(struct Declarator *declarator);
+void declarator_free(struct Declarator *declarator);
+
+struct Declaration *declaration_new(GList *specifiers, GList *declarators);
 void declaration_free(struct Declaration *declaration);
 // void declaration_print(struct Declaration *declaration);
 
 
-struct ExprAssignment *expr_assignment_new(struct Identifier *lhs, struct Expr *rhs);
+struct ExprAssignment *expr_assignment_new(enum LValueType lvalue_type, void *lhs, struct Expr *rhs);
 struct ExprCall *expr_call_new(struct Expr *function, GList *args);
 struct ExprConstant *expr_constant_new(struct Constant *constant);
 struct ExprIdentifier *expr_identifier_new(struct Identifier *id);
+struct ExprIndexed *expr_indexed_new(struct Expr *expr, struct Expr *index);
 struct ExprOp *expr_op_new(enum Op op, struct Expr *arg1, struct Expr *arg2);
 struct Expr *expr_new(enum ExprType type);
+void expr_indexed_free(struct ExprIndexed *indexed);
 void expr_free(struct Expr *expr);
 
-struct StatementJump *statement_jump_new();
-struct StatementSelection *statement_selection_new();
+struct StatementFor *statement_for_new(struct Expr *init, struct Expr *test, struct Expr *update, struct Statement *body);
+struct StatementJump *statement_jump_new(enum StatementJumpType type);
+struct StatementLabeled *statement_labeled_new(enum StatementLabeledType type, void *label_or_test, struct Statement *statement);
+struct StatementSelection *statement_selection_new(struct Expr *test, struct Statement *conseq, struct Statement *alt);
+struct StatementSwitch *statement_switch_new(struct Expr *test, struct Statement *body);
+struct StatementWhile *statement_while_new(struct Expr *test, struct Statement *body);
+void statement_for_free();
 void statement_jump_free();
 void statement_selection_free();
+void statement_while_free();
 struct Statement *statement_new(enum StatementType type);
 void statement_free(struct Statement *statement);
 
 struct Block *block_new(GList *block_elements, struct SymbolTable *st);
 struct Block *block_extend(struct Block *block, void *elt);
 void block_free(struct Block *block);
-// void block_print(struct Block *block);
 void block_element_free();
-// void block_element_print();
 
-struct Function *function_new(struct Type *return_type, struct Identifier *name, GList *param_declarations, struct Block *block);
+struct Function *function_new(struct Declarator *declarator, struct Block *block, GList *specifiers);
+struct Identifier *function_identifier(struct Function *function);
 void function_free(struct Function *function);
-// void function_print(struct Function *function);
 
 struct Program *program_new(struct Block *top_leveL_nodes);
 void program_free(struct Program *prog);
-// void program_print(struct Program *prog);
 
 
 struct SymbolTable {

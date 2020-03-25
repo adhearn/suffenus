@@ -58,7 +58,17 @@ extern int yydebug;
     NEWLINE = 264,
     RETURN = 265,
     IF = 266,
-    ELSE = 267
+    ELSE = 267,
+    FOR = 268,
+    WHILE = 269,
+    BREAK = 270,
+    CONTINUE = 271,
+    GOTO = 272,
+    SWITCH = 273,
+    CASE = 274,
+    DEFAULT = 275,
+    INT = 276,
+    VOID = 277
   };
 #endif
 
@@ -75,18 +85,23 @@ union YYSTYPE
     enum Op op;
     struct Constant *constant;
     struct Identifier *identifier;
+    struct Declarator *declarator;
     struct Declaration *declaration;
     struct Expr *expr;
     struct Statement *statement;
+    struct StatementFor *for_loop;
+    struct StatementJump *jump;
+    struct StatementLabeled *labeled;
+    struct StatementSelection *selection;
+    struct StatementSwitch *switch_statement;
+    struct StatementWhile *while_loop;
     struct Program *program;
     struct Function *function;
     struct Type *type;
-    struct StatementSelection *selection;
-    struct StatementJump *jump;
     struct Block *block;
     void *block_element;
 
-#line 90 "parser.tab.h" /* yacc.c:1921  */
+#line 105 "parser.tab.h" /* yacc.c:1921  */
 };
 
 typedef union YYSTYPE YYSTYPE;

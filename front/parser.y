@@ -22,14 +22,19 @@ extern int yylineno;
     enum Op op;
     struct Constant *constant;
     struct Identifier *identifier;
+    struct Declarator *declarator;
     struct Declaration *declaration;
     struct Expr *expr;
     struct Statement *statement;
+    struct StatementFor *for_loop;
+    struct StatementJump *jump;
+    struct StatementLabeled *labeled;
+    struct StatementSelection *selection;
+    struct StatementSwitch *switch_statement;
+    struct StatementWhile *while_loop;
     struct Program *program;
     struct Function *function;
     struct Type *type;
-    struct StatementSelection *selection;
-    struct StatementJump *jump;
     struct Block *block;
     void *block_element;
 }
@@ -43,22 +48,30 @@ extern int yylineno;
 %token                  INTEGER
 %token                  NEWLINE
 %token                  RETURN
-%token                  IF
-%token                  ELSE
+%token                  IF ELSE
+%token                  FOR WHILE
+%token                  BREAK CONTINUE GOTO
+%token                  SWITCH CASE DEFAULT
+%token                  INT VOID
 
 %type   <program>       program
-%type   <integer>       INTEGER
+%type   <integer>       INTEGER type_specifier INT VOID
 %type   <op>            RELOP BINOP UNOP EQOP
 %type   <block>         top_level_block block compound_statement
 %type   <block_element> top_level_block_element block_element
 %type   <statement>     statement
-%type   <declaration>   declaration declaration_specifier
-%type   <type>          type
+%type   <declarator>    declarator direct_declarator init_declarator
+%type   <declaration>   declaration parameter_declaration
 %type   <str>           ID
+%type   <identifier>    identifier
 %type   <function>      function
-%type   <list>          argument_expr_list declaration_specifier_list
-%type   <expr>          expr expr_statement primary_expr postfix_expr unary_expr relational_expr additive_expr multiplicative_expr assignment_expr equality_expr
+%type   <list>          argument_expr_list declaration_specifiers identifier_list parameter_type_list init_declarator_list parameter_list
+%type   <expr>          expr expr_statement primary_expr postfix_expr unary_expr relational_expr additive_expr multiplicative_expr assignment_expr equality_expr and_expr exclusive_or_expr inclusive_or_expr logical_and_expr logical_or_expr conditional_expr constant_expr initializer
+%type   <for_loop>      for_statement
 %type   <jump>          jump_statement
+%type   <labeled>       labeled_statement
+%type   <switch_statement> switch_statement
+%type   <while_loop>    while_statement
 %type   <selection>     selection_statement
 
 %%
@@ -90,27 +103,105 @@ top_level_block_element:
                 ;
 
 declaration:
-                declaration_specifier ';' {
+                declaration_specifiers ';' {
+                    $$ = declaration_new($1, NULL);
+                }
+        |
+                declaration_specifiers init_declarator_list ';' {
+                    $$ = declaration_new($1, $2);
+                }
+        ;
+
+declaration_specifiers:
+                type_specifier {
+                    $$ = g_list_append(NULL, GINT_TO_POINTER($1));
+                }
+        |
+                declaration_specifiers type_specifier {
+                    $$ = g_list_prepend($1, GINT_TO_POINTER($1));
+                }
+                ;
+
+init_declarator_list:
+                init_declarator {
+                    $$ = g_list_append(NULL, $1);
+                }
+        |
+                init_declarator_list ',' init_declarator {
+                    $$ = g_list_append($1, $3);
+                }
+        ;
+
+init_declarator:
+                declarator { $$ = $1; }
+        |
+                declarator '=' initializer {
+                    $1->initializer = $3;
                     $$ = $1;
                 }
         ;
 
-declaration_specifier:
-                type ID {
-                    struct Identifier *identifier = identifier_new($2, $1);
-                    struct Declaration *decl = declaration_new($1, identifier);
-                    $$ = decl;
+initializer:
+                assignment_expr { $$ = $1; }
+        /* | */
+        /*         '{' initializer_list '}' { */
+
+        /*         } */
+        /* | */
+        /*         '{' initializer_list ',' '}' { */
+
+        /*         } */
+        ;
+
+// For array/struct initialization later
+/* initializer_list: */
+/*                 initializer {} */
+/*         |       initializer_list ',' initializer {} */
+/* ; */
+
+declarator:
+                direct_declarator { $$ = $1; }
+                ;
+
+direct_declarator:
+                identifier { $$ = declarator_new(DECLARATOR_IDENTIFIER, NULL, $1); }
+        |
+                '(' declarator ')' { $$ = $2; }
+        |
+                direct_declarator '[' constant_expr ']' {
+                    $$ = declarator_new(DECLARATOR_ARRAY, $1, $3);
+                }
+        |
+                direct_declarator '[' ']' {
+                    $$ = declarator_new(DECLARATOR_ARRAY, $1, NULL);
+                }
+        |
+                direct_declarator '(' parameter_type_list ')' {
+                    $$ = declarator_new(DECLARATOR_FUNCTION, $1, $3);
+                }
+        |
+                direct_declarator '(' identifier_list ')' {
+                    $$ = declarator_new(DECLARATOR_FUNCTION, $1, $3);
+                }
+        |
+                direct_declarator '(' ')' {
+                    $$ = declarator_new(DECLARATOR_FUNCTION, $1, NULL);
                 }
                 ;
 
-declaration_specifier_list:
-                declaration_specifier {
-                    $$ = g_list_append(NULL, $1);
-                }
+/* declaration_specifier: */
+/*                 type ID { */
+/*                     struct Identifier *identifier = identifier_new($2, $1); */
+/*                     struct Declaration *decl = declaration_new($1, identifier); */
+/*                     $$ = decl; */
+/*                 } */
+/*                 ; */
+
+
+type_specifier:
+                INT { $$ = $1; }
         |
-                declaration_specifier_list ',' declaration_specifier {
-                    $$ = g_list_append($1, $3);
-                }
+                VOID {$$ = $1; }
         ;
 
 block:
@@ -128,26 +219,40 @@ block:
 
 block_element:
                 declaration { $$ = $1; }
-        |       statement { $$ = $1; }
+        |
+                statement { $$ = $1; }
                 ;
 
-function:
-                type ID '(' ')' '{' block '}' {
-                    struct Identifier *identifier = identifier_new($2, NULL);
-                    type_make_fn_type($1);
-                    identifier->type = $1;
-                    struct Function *func = function_new($1, identifier, NULL, $6);
-                    $$ = func;
+parameter_type_list:
+                parameter_list { $$ = $1; }
+        ;
+
+parameter_list:
+                parameter_declaration {
+                    $$ = g_list_append(NULL, $1);
                 }
         |
-                type ID '(' declaration_specifier_list ')' '{' block '}' {
-                    struct Identifier *identifier = identifier_new($2, NULL);
-                    type_make_fn_type($1);
-                    identifier->type = $1;
-                    GList *params_list = $4;
-                    struct Function *func = function_new($1, identifier, params_list, $7);
+                parameter_list parameter_declaration {
+                    $$ = g_list_append($1, $2);
+                }
+        ;
+
+parameter_declaration:
+                declaration_specifiers declarator {
+                    GList *declarators = g_list_append(NULL, $2);
+                    $$ = declaration_new($1, declarators);
+                }
+        |
+                declaration_specifiers {
+                    $$ = declaration_new($1, NULL);
+                }
+        ;
+
+function:
+                declaration_specifiers declarator compound_statement {
+                    struct Function *func = function_new($2, $3, $1);
                     $$ = func;
-}
+                }
                 ;
 
 statement:
@@ -163,15 +268,39 @@ statement:
                     $$ = stmt;
                 }
         |
+                for_statement {
+                    struct Statement *stmt = statement_new(STMT_TYPE_FOR);
+                    stmt->for_loop = $1;
+                    $$ = stmt;
+                }
+        |
                 jump_statement {
                     struct Statement *stmt = statement_new(STMT_TYPE_JUMP);
                     stmt->jump = $1;
                     $$ = stmt;
                 }
         |
+                labeled_statement {
+                    struct Statement *stmt = statement_new(STMT_TYPE_LABELED);
+                    stmt->labeled = $1;
+                    $$ = stmt;
+                }
+|
                 selection_statement {
                     struct Statement *stmt = statement_new(STMT_TYPE_SELECTION);
                     stmt->selection = $1;
+                    $$ = stmt;
+                }
+        |
+                switch_statement {
+                    struct Statement *stmt = statement_new(STMT_TYPE_SWITCH);
+                    stmt->switch_statement = $1;
+                    $$ = stmt;
+                }
+        |
+                while_statement {
+                    struct Statement *stmt = statement_new(STMT_TYPE_WHILE);
+                    stmt->while_loop = $1;
                     $$ = stmt;
                 }
                 ;
@@ -188,14 +317,56 @@ expr_statement:
                 }
                 ;
 
+for_statement:
+                FOR '(' expr_statement expr_statement ')' statement {
+                    $$ = statement_for_new($3, $4, NULL, $6);
+                }
+        |
+                FOR '(' expr_statement expr_statement expr ')' statement {
+                    $$ = statement_for_new($3, $4, $5, $7);
+                }
+                ;
+
 jump_statement:
+                BREAK ';' {
+                    struct StatementJump *jump = statement_jump_new(JUMP_BREAK);
+                    $$ = jump;
+                }
+        |
+                CONTINUE ';' {
+                    struct StatementJump *jump = statement_jump_new(JUMP_CONTINUE);
+                    $$ = jump;
+                }
+        |
+                GOTO identifier ';' {
+                    struct StatementJump *jump = statement_jump_new(JUMP_GOTO);
+                    jump->identifier = $2;
+                    $$ = jump;
+                }
+        |
                 RETURN expr ';' {
-                    struct StatementJump *jump = statement_jump_new();
-                    jump->type = JUMP_RETURN;
+                    struct StatementJump *jump = statement_jump_new(JUMP_RETURN);
                     jump->expr = $2;
                     $$ = jump;
                 }
                 ;
+
+labeled_statement:
+                identifier ':' statement {
+                    struct StatementLabeled *labeled = statement_labeled_new(LABELED_LABEL, $1, $3);
+                    $$ = labeled;
+                }
+        |
+                CASE expr ':' statement {
+                    struct StatementLabeled *labeled = statement_labeled_new(LABELED_CASE, $2, $4);
+                    $$ = labeled;
+                }
+        |
+                DEFAULT ':' statement {
+                    struct StatementLabeled *labeled = statement_labeled_new(LABELED_DEFAULT, NULL, $3);
+                    $$ = labeled;
+                }
+        ;
 
 selection_statement:
                 IF '(' expr ')' statement {
@@ -209,10 +380,28 @@ selection_statement:
                 }
                 ;
 
+// TODO: This doesn't actually parse case statements the way the standard says it should - my parser requires
+// the body of the case statement to be surround by braces. Otherwise, we can't know what to do with statements
+// beyond the first statement in a case body - does it belong to the case statement, or as a new element in
+// the switch statement body? I don't actually know how other parsers solve this problem. Again, my lack
+// of parser theory is probably hurting me here.
+switch_statement:
+                SWITCH '(' expr ')' statement {
+                    struct StatementSwitch *sel = statement_switch_new($3, $5);
+                    $$ = sel;
+                }
+                ;
+
+while_statement:
+                WHILE '(' expr ')' statement {
+                    $$ = statement_while_new($3, $5);
+                }
+                ;
+
+
 primary_expr:
-                ID {
-                    struct Identifier *identifier = identifier_new($1, NULL);
-                    struct ExprIdentifier *expr_identifier = expr_identifier_new(identifier);
+                identifier {
+                    struct ExprIdentifier *expr_identifier = expr_identifier_new($1);
                     struct Expr *expr = expr_new(EXPR_IDENTIFIER);
                     expr->id = expr_identifier;
                     $$ = expr;
@@ -254,6 +443,10 @@ postfix_expr:
                     struct Expr *expr = expr_new(EXPR_CALL);
                     expr->call = call;
                     $$ = expr;
+                }
+        |
+                postfix_expr '[' expr ']' {
+
                 }
         ;
 
@@ -320,27 +513,82 @@ equality_expr:
                 }
         ;
 
+and_expr:
+                equality_expr { $$ = $1; }
+        //|       and_expr '&' equality_expr
+                ;
+
+exclusive_or_expr:
+                and_expr { $$ = $1; }
+//              | exclusive_or_expr '^' and_expr
+                ;
+
+inclusive_or_expr:
+                exclusive_or_expr { $$ = $1; }
+//                      |       inclusive_or_expr '|' exclusive_or_expr
+                ;
+
+logical_and_expr:
+                inclusive_or_expr { $$ = $1; }
+//              | logical_and_expr AND_OP inclusive_or_expr
+                ;
+
+logical_or_expr:
+                logical_and_expr { $$ = $1; }
+//        |       logical_or_expr OR_OP logical_and_expr
+                ;
+
+conditional_expr:
+                logical_or_expr { $$ = $1; }
+        ;
+
+constant_expr:
+                conditional_expr { $$ = $1; }
+        ;
+
 assignment_expr:
                 equality_expr { $$ = $1; }
         |
-                ID '=' assignment_expr {
-                    struct Identifier *identifier = identifier_new($1, NULL);
-                    struct ExprAssignment *assignment = expr_assignment_new(identifier, $3);
+                identifier '=' assignment_expr {
+                    struct ExprAssignment *assignment = expr_assignment_new(LVALUE_IDENTIFIER, $1, $3);
                     struct Expr *expr = expr_new(EXPR_ASSIGNMENT);
                     expr->assignment = assignment;
                     $$ = expr;
+                }
+        |
+                postfix_expr '=' assignment_expr {
+                    struct Expr *postfix = $1;
+                    if (postfix->type != EXPR_INDEXED) {
+                        log_err("Only Identifiers and indexed Expressions can appear on the LHS of an assignment");
+                        YYABORT;
+                    } else {
+                        struct ExprAssignment *assignment = expr_assignment_new(LVALUE_INDEXED, $1, $3);
+                        struct Expr *expr = expr_new(EXPR_ASSIGNMENT);
+                        expr->assignment = assignment;
+                        $$ = expr;
+                    }
                 }
         ;
 
 expr:           assignment_expr { $$ = $1; }
         ;
 
-type:
-                ID {
-                    struct Type *type = type_new($1);
-                    $$ = type;
+identifier_list:
+                identifier {
+                    $$ = g_list_append(NULL, $1);
                 }
-                ;
+        |
+                identifier_list ',' identifier {
+                    $$ = g_list_append($1, $3);
+                }
+        ;
+
+identifier:
+                ID {
+                    struct Identifier *id = identifier_new($1, NULL);
+                    $$ = id;
+                }
+        ;
 
 %%
 

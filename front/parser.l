@@ -10,13 +10,27 @@
 "=" { return yytext[0]; }
 "," { return yytext[0]; }
 ";" { return yytext[0]; }
+":" { return yytext[0]; }
 "(" { return yytext[0]; }
 ")" { return yytext[0]; }
 "{" { return yytext[0]; }
 "}" { return yytext[0]; }
+"[" { return yytext[0]; }
+"]" { return yytext[0]; }
 "return" { return RETURN; }
 "if" { return IF; }
 "else" { return ELSE; }
+"for" { return FOR; }
+"while" { return WHILE; }
+"break" { return BREAK; }
+"continue" { return CONTINUE; }
+"goto" { return GOTO; }
+"switch" { return SWITCH; }
+"case" { return CASE; }
+"default" { return DEFAULT; }
+"int" { return INT; }
+"void" { return VOID; }
+
 
 "+" { return yytext[0]; }
 "-" { return yytext[0]; }

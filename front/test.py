@@ -10,6 +10,22 @@ tests = [
     ("if_else", 23),
     ("func_simple", 5),
     ("fact5", 120),
+    ("while_simple", 32),
+    ("while_skip", 42),
+    ("while_continue", 4),
+    ("while_break", 1),
+    ("for_simple", 32),
+    ("for_simpler", 32),
+    ("for_skip", 42),
+    ("for_continue", 4),
+    ("for_break", 1),
+    ("goto_simple", 23),
+    ("switch_break", 42),
+    ("switch_no_break", 42),
+    ("switch_default", 23),
+    ("indexed_lhs_simple", 0),
+    # ("array_simple", 40),
+    # ("array_arg", 40),
 ]
 testDir = "tests"
 testExtension = ".c"

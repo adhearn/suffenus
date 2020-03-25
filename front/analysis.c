@@ -19,11 +19,31 @@ void identifier_validate_declared(struct Identifier *identifier, struct SymbolTa
     }
 }
 
+void expr_assignment_build_symbol_table(struct ExprAssignment *assignment, struct SymbolTable *st) {
+    switch (assignment->lvalue_type) {
+    case LVALUE_IDENTIFIER: {
+        struct Identifier *identifier = (struct Identifier *)assignment->lhs;
+        struct Identifier **identifier_pointer = (struct Identifier **)&assignment->lhs;
+        identifier_validate_declared(identifier, st, identifier_pointer);
+        break;
+    }
+    case LVALUE_INDEXED: {
+        expr_indexed_build_symbol_table((struct ExprIndexed *)assignment->lhs, st);
+        break;
+    }
+    }
+    expr_build_symbol_table(assignment->rhs, st);
+}
+
+void expr_indexed_build_symbol_table(struct ExprIndexed *indexed, struct SymbolTable *st) {
+    expr_build_symbol_table(indexed->expr, st);
+    expr_build_symbol_table(indexed->index, st);
+}
+
 void expr_build_symbol_table(struct Expr *expr, struct SymbolTable *st) {
     switch (expr->type) {
     case (EXPR_ASSIGNMENT):
-        identifier_validate_declared(expr->assignment->lhs, st, &expr->assignment->lhs);
-        expr_build_symbol_table(expr->assignment->rhs, st);
+        expr_assignment_build_symbol_table(expr->assignment, st);
         break;
     case (EXPR_CALL):
         // The order in which these are evaluated is actually undefined in the standard. Becasue they're
@@ -37,6 +57,9 @@ void expr_build_symbol_table(struct Expr *expr, struct SymbolTable *st) {
     case (EXPR_IDENTIFIER):
         identifier_validate_declared(expr->id->id, st, &expr->id->id);
         break;
+    case (EXPR_INDEXED):
+        expr_indexed_build_symbol_table(expr->indexed, st);
+        break;
     case (EXPR_BINOP):
     case (EXPR_RELOP):
         expr_build_symbol_table(expr->op->arg1, st);
@@ -49,6 +72,7 @@ void statement_jump_build_symbol_table(struct StatementJump *jump, struct Symbol
     switch(jump->type) {
     case JUMP_BREAK:
     case JUMP_CONTINUE:
+        break;
     case JUMP_GOTO:
         break;
     case JUMP_RETURN:
@@ -67,8 +91,24 @@ void statement_build_symbol_table(struct Statement *statement, struct SymbolTabl
     case (STMT_TYPE_EXPR):
         expr_build_symbol_table(statement->expr, st);
         break;
+    case (STMT_TYPE_FOR): {
+        struct StatementFor *loop = statement->for_loop;
+        expr_build_symbol_table(loop->init, st);
+        expr_build_symbol_table(loop->test, st);
+        if (loop->update) {
+            expr_build_symbol_table(loop->update, st);
+        }
+        statement_build_symbol_table(loop->body, st);
+        break;
+    }
     case (STMT_TYPE_JUMP):
         statement_jump_build_symbol_table(statement->jump, st);
+        break;
+    case (STMT_TYPE_LABELED):
+        // TODO: Need to add the label to the symbol table, so we can confirm that all gotos are to
+        // actualy labels. However, we'll have to do that check after we've walked the whole program,
+        // since labels can be jumped to before they actually show up.
+        statement_build_symbol_table(statement->labeled->statement, st);
         break;
     case (STMT_TYPE_SELECTION):
     {
@@ -80,16 +120,27 @@ void statement_build_symbol_table(struct Statement *statement, struct SymbolTabl
         }
         break;
     }
+    case (STMT_TYPE_SWITCH):
+    {
+        struct StatementSwitch *s = statement->switch_statement;
+        expr_build_symbol_table(s->test, st);
+        statement_build_symbol_table(s->body, st);
+        break;
+    }
+    case (STMT_TYPE_WHILE): {
+        struct StatementWhile *loop = statement->while_loop;
+        expr_build_symbol_table(loop->test, st);
+        statement_build_symbol_table(loop->body, st);
+        break;
+    }
     default:
         log_err("Found unmatched statement type in statement_build_symbol_table: %d", statement->type);
         SYMBOL_TABLE_ERROR = TRUE;
     }
 }
 
-void declaration_build_symbol_table(struct Declaration *declaration, struct SymbolTable *st) {
-    struct Type *type = declaration->type;
-    struct Identifier *identifier = declaration->id;
-    identifier->type = type;
+// TODO: Add a type here
+void declare_identifier(struct Identifier *identifier, struct SymbolTable *st) {
     if (symbol_table_lookup_local(st, identifier->id)) {
         // TODO: Add line number information
         log_err("Variable already declared in scope: %s", identifier->id);
@@ -102,10 +153,45 @@ void declaration_build_symbol_table(struct Declaration *declaration, struct Symb
     symbol_table_extend(st, identifier);
 }
 
+void declarator_build_symbol_table(struct Declarator *declarator, struct SymbolTable *st) {
+    if (declarator->sub_declarator) {
+        declarator_build_symbol_table(declarator->sub_declarator, st);
+    }
+
+    if (declarator->initializer) {
+        expr_build_symbol_table(declarator->initializer, st);
+    }
+
+    switch(declarator->type) {
+    case DECLARATOR_IDENTIFIER:
+        declare_identifier(declarator->identifier, st);
+        break;
+    case DECLARATOR_ARRAY:
+        if (declarator->array_size_expr) {
+            expr_build_symbol_table(declarator->array_size_expr, st);
+        }
+        break;
+    case DECLARATOR_FUNCTION:
+        if (declarator->param_or_identifier_list) {
+            // Not sure if this actually works or not...
+            if (ast_node_type(declarator->param_or_identifier_list->data) == NODE_TYPE_IDENTIFIER) {
+                g_list_foreach(declarator->param_or_identifier_list, (GFunc)declare_identifier, (gpointer *)st);
+            } else {
+                g_list_foreach(declarator->param_or_identifier_list, (GFunc)declaration_build_symbol_table, (gpointer *)st);
+            }
+        }
+        break;
+    }
+}
+
+void declaration_build_symbol_table(struct Declaration *declaration, struct SymbolTable *st) {
+    GList *declarators = declaration->declarators;
+    g_list_foreach(declarators, (GFunc)declarator_build_symbol_table, (gpointer *)st);
+}
+
 void function_build_symbol_table(struct Function *func, struct SymbolTable *st) {
-    symbol_table_extend(st, func->name);
+    declarator_build_symbol_table(func->declarator, st);
     struct SymbolTable *body_st = symbol_table_new(st);
-    g_list_foreach(func->param_declarations, (GFunc)declaration_build_symbol_table, (gpointer)body_st);
     struct Block *body = func->body;
     block_build_symbol_table(body, body_st);
 }

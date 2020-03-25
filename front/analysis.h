@@ -5,6 +5,8 @@
 #include "lang.h"
 
 void identifier_validate_declared(struct Identifier *identifier, struct SymbolTable *st, struct Identifier **id_loc);
+void expr_assignment_build_symbol_table(struct ExprAssignment *expr, struct SymbolTable *st);
+void expr_indexed_build_symbol_table(struct ExprIndexed *expr, struct SymbolTable *st);
 void expr_build_symbol_table(struct Expr *expr, struct SymbolTable *st);
 
 void statement_build_symbol_table(struct Statement* statement, struct SymbolTable *st);

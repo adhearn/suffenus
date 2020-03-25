@@ -34,16 +34,6 @@ void type_free(struct Type *type) {
 /*     printf("%s", type->type); */
 /* } */
 
-/**
- * For now, we can be lazy with our function types, because functions don't yet
- * support parameters! We can just add some empty parens at the end of the type
- * string for now, but we'll have to support params later.
- */
-void type_make_fn_type(struct Type *type) {
-    char *old_type_str = type->type;
-    asprintf(&(type->type), "%s()", old_type_str);
-}
-
 struct Identifier *identifier_new(char *id, struct Type *type) {
     struct Identifier *identifier = malloc(sizeof(struct Identifier));
     check_mem(id);
@@ -78,18 +68,42 @@ void constant_free(struct Constant *c) {
 /*     printf("%d", c->val); */
 /* } */
 
-struct Declaration *declaration_new(struct Type *type, struct Identifier *id) {
+struct Declarator *declarator_new(enum DeclaratorType type, struct Declarator *sub_declarator, void *other) {
+    struct Declarator *declarator = malloc(sizeof(struct Declarator));
+    check_mem(declarator);
+    declarator->type = type;
+    declarator->sub_declarator = sub_declarator;
+    declarator->identifier = other;
+    return declarator;
+}
+
+struct Identifier *declarator_identifier(struct Declarator *declarator) {
+    switch (declarator->type) {
+    case (DECLARATOR_IDENTIFIER):
+        return declarator->identifier;
+    case DECLARATOR_FUNCTION:
+    case DECLARATOR_ARRAY:
+        return declarator_identifier(declarator->sub_declarator);
+    default:
+        return NULL;
+    }
+}
+
+void declarator_free(struct Declarator *declarator) {
+    return;
+}
+
+struct Declaration *declaration_new(GList *specifiers, GList *declarators) {
     struct Declaration *decl = malloc(sizeof(struct Declaration));
     check_mem(decl);
     decl->node_type = NODE_TYPE_DECLARATION;
-    decl->type = type;
-    decl->id = id;
+    decl->specifiers = specifiers;
+    decl->declarators = declarators;
     return decl;
 }
 
 void declaration_free(struct Declaration *decl) {
-    type_free(decl->type);
-    identifier_free(decl->id);
+// TODO: implement this
     free(decl);
 }
 
@@ -97,16 +111,24 @@ void declaration_free(struct Declaration *decl) {
 /*     printf("Declaration: %s %s\n", decl->type->type, decl->id->id); */
 /* } */
 
-struct ExprAssignment *expr_assignment_new(struct Identifier *lhs, struct Expr *rhs) {
+struct ExprAssignment *expr_assignment_new(enum LValueType type, void *lhs, struct Expr *rhs) {
     struct ExprAssignment *assignment = malloc(sizeof(struct ExprAssignment));
     check_mem(assignment);
+    assignment->lvalue_type = type;
     assignment->lhs = lhs;
     assignment->rhs = rhs;
     return assignment;
 }
 
 void expr_assignment_free(struct ExprAssignment *assignment) {
-    identifier_free(assignment->lhs);
+    switch (assignment->lvalue_type) {
+    case LVALUE_IDENTIFIER:
+        identifier_free((struct Identifier *)assignment->lhs);
+        break;
+    case LVALUE_INDEXED:
+        expr_indexed_free((struct ExprIndexed *)assignment->lhs);
+        break;
+    }
     expr_free(assignment->rhs);
     free(assignment);
 }
@@ -149,6 +171,20 @@ void expr_identifier_free(struct ExprIdentifier *expr) {
     free(expr);
 }
 
+struct ExprIndexed *expr_indexed_new(struct Expr *expr, struct Expr *index) {
+    struct ExprIndexed *expr_indexed = malloc(sizeof(struct ExprIndexed));
+    check_mem(expr_indexed);
+    expr_indexed->expr = expr;
+    expr_indexed->index = index;
+    return expr_indexed;
+}
+
+void expr_indexed_free(struct ExprIndexed *expr) {
+    free(expr->expr);
+    free(expr->index);
+    free(expr);
+}
+
 struct ExprOp *expr_op_new(enum Op op, struct Expr *arg1, struct Expr *arg2) {
     struct ExprOp *expr_op = malloc(sizeof(struct ExprOp));
     check_mem(expr_op);
@@ -186,6 +222,9 @@ void expr_free(struct Expr *expr) {
         break;
     case (EXPR_IDENTIFIER):
         expr_identifier_free(expr->id);
+        break;
+    case (EXPR_INDEXED):
+        expr_indexed_free(expr->indexed);
         break;
     case (EXPR_BINOP):
     case (EXPR_RELOP):
@@ -238,11 +277,28 @@ void expr_free(struct Expr *expr) {
 /*     free(ret); */
 /* } */
 
-struct StatementJump *statement_jump_new(enum StatementJumpType type, void *target) {
+struct StatementFor *statement_for_new(struct Expr *init, struct Expr *test, struct Expr *update, struct Statement *body) {
+    struct StatementFor *loop = malloc(sizeof(struct StatementFor));
+    check_mem(loop);
+    loop->init = init;
+    loop->test = test;
+    loop->update = update;
+    loop->body = body;
+    return loop;
+}
+
+void statement_for_free(struct StatementFor *loop) {
+    expr_free(loop->init);
+    expr_free(loop->test);
+    expr_free(loop->update);
+    statement_free(loop->body);
+    free(loop);
+}
+
+struct StatementJump *statement_jump_new(enum StatementJumpType type) {
     struct StatementJump *jump = malloc(sizeof(struct StatementJump));
     check_mem(jump);
     jump->type = type;
-    jump->expr = target;
     return jump;
 }
 
@@ -260,6 +316,21 @@ void statement_jump_free(struct StatementJump *jump) {
     }
 
     free(jump);
+}
+
+struct StatementLabeled *statement_labeled_new(enum StatementLabeledType type, void *label_or_test, struct Statement *statement) {
+    struct StatementLabeled *labeled = malloc(sizeof(struct StatementLabeled));
+    check_mem(labeled);
+    labeled->type = type;
+    labeled->label = label_or_test;
+    labeled->statement = statement;
+    return labeled;
+}
+
+void statement_labeled_free(struct StatementLabeled *labeled) {
+    identifier_free(labeled->label);
+    statement_free(labeled->statement);
+    free(labeled);
 }
 
 struct StatementSelection *statement_selection_new(struct Expr *test, struct Statement *conseq, struct Statement *alt) {
@@ -280,6 +351,34 @@ void statement_selection_free(struct StatementSelection *selection) {
     free(selection);
 }
 
+struct StatementSwitch *statement_switch_new(struct Expr *test, struct Statement *body) {
+    struct StatementSwitch *s = malloc(sizeof(struct StatementSwitch));
+    check_mem(s);
+    s->test = test;
+    s->body = body;
+    return s;
+}
+
+void statement_switch_free(struct StatementSwitch *s) {
+    expr_free(s->test);
+    statement_free(s->body);
+    free(s);
+}
+
+struct StatementWhile *statement_while_new(struct Expr *test, struct Statement *body) {
+    struct StatementWhile *loop = malloc(sizeof(struct StatementWhile));
+    check_mem(loop);
+    loop->test = test;
+    loop->body = body;
+    return loop;
+}
+
+void statement_while_free(struct StatementWhile *loop) {
+    expr_free(loop->test);
+    statement_free(loop->body);
+    free(loop);
+}
+
 struct Statement *statement_new(enum StatementType type) {
     struct Statement *stmt = malloc(sizeof(struct Statement));
     check_mem(stmt);
@@ -293,6 +392,9 @@ void statement_free(struct Statement *stmt) {
     case STMT_TYPE_COMPOUND:
         block_free(stmt->compound);
         break;
+    case STMT_TYPE_FOR:
+        statement_for_free(stmt->for_loop);
+        break;
     case STMT_TYPE_RETURN:
     case STMT_TYPE_EXPR:
         expr_free(stmt->expr);
@@ -300,8 +402,18 @@ void statement_free(struct Statement *stmt) {
     case STMT_TYPE_JUMP:
         statement_jump_free(stmt->jump);
         break;
+    case STMT_TYPE_LABELED:
+        statement_labeled_free(stmt->labeled);
+        break;
     case STMT_TYPE_SELECTION:
         statement_selection_free(stmt->selection);
+        break;
+    case STMT_TYPE_SWITCH:
+        expr_free(stmt->switch_statement->test);
+        statement_free(stmt->switch_statement->body);
+        break;
+    case STMT_TYPE_WHILE:
+        statement_while_free(stmt->while_loop);
         break;
     }
     free(stmt);
@@ -383,24 +495,27 @@ void block_free(struct Block *block) {
 /*     g_list_foreach(block->block_elements, (GFunc)block_element_print, NULL); */
 /* } */
 
-struct Function *function_new(struct Type *return_type, struct Identifier *name, GList *param_declarations, struct Block *body) {
+struct Function *function_new(struct Declarator *declarator, struct Block *body, GList *specifiers) {
+    if (declarator->type != DECLARATOR_FUNCTION) {
+        log_err("WARNING: attempting to declare a function with a declarator with the wrong type");
+    }
     struct Function *function = malloc(sizeof(struct Function));
     check_mem(function);
-
     function->node_type = NODE_TYPE_FUNCTION;
-    function->return_type = return_type;
-    function->name = name;
-    function->param_declarations = param_declarations;
+    function->declarator = declarator;
     function->body = body;
-
+    function->specifiers = specifiers;
     return function;
 }
 
+struct Identifier *function_identifier(struct Function *function) {
+    return declarator_identifier(function->declarator);
+}
+
 void function_free(struct Function *func) {
-    type_free(func->return_type);
-    identifier_free(func->name);
-    g_list_free_full(func->param_declarations, (GDestroyNotify)declaration_free);
+    declarator_free(func->declarator);
     block_free(func->body);
+    // TODO: free specifiers
     free(func);
 }
 
