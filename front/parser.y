@@ -16,6 +16,7 @@ extern int yylineno;
 %define parse.error verbose
 
 %union {
+    char character;
     int integer;
     char *str;
     GList *list;
@@ -24,6 +25,8 @@ extern int yylineno;
     struct Identifier *identifier;
     struct Declarator *declarator;
     struct Declaration *declaration;
+    struct Enum *enumeration;
+    struct EnumElement *enum_element;
     struct Expr *expr;
     struct Statement *statement;
     struct StatementFor *for_loop;
@@ -32,6 +35,7 @@ extern int yylineno;
     struct StatementSelection *selection;
     struct StatementSwitch *switch_statement;
     struct StatementWhile *while_loop;
+    struct Struct *structure;
     struct Program *program;
     struct Function *function;
     struct Type *type;
@@ -52,27 +56,32 @@ extern int yylineno;
 %token                  FOR WHILE
 %token                  BREAK CONTINUE GOTO
 %token                  SWITCH CASE DEFAULT
-%token                  INT VOID
+%token                  ENUM STRUCT UNION
+%token                  VOID INT
 
 %type   <program>       program
-%type   <integer>       INTEGER type_specifier INT VOID
-%type   <op>            RELOP BINOP UNOP EQOP
+%type   <integer>       INTEGER STRUCT UNION struct_or_union
+%type   <op>            RELOP BINOP UNOP EQOP unary_operator
 %type   <block>         top_level_block block compound_statement
 %type   <block_element> top_level_block_element block_element
 %type   <statement>     statement
-%type   <declarator>    declarator direct_declarator init_declarator
-%type   <declaration>   declaration parameter_declaration
+%type   <declarator>    declarator direct_declarator init_declarator struct_declarator
+%type   <declaration>   declaration parameter_declaration struct_declaration
+%type   <type>          type_specifier
+%type   <enumeration>   enum_specifier
+%type   <enum_element>  enumerator
 %type   <str>           ID
 %type   <identifier>    identifier
 %type   <function>      function
-%type   <list>          argument_expr_list declaration_specifiers identifier_list parameter_type_list init_declarator_list parameter_list
-%type   <expr>          expr expr_statement primary_expr postfix_expr unary_expr relational_expr additive_expr multiplicative_expr assignment_expr equality_expr and_expr exclusive_or_expr inclusive_or_expr logical_and_expr logical_or_expr conditional_expr constant_expr initializer
+%type   <list>          argument_expr_list declaration_specifiers identifier_list parameter_type_list init_declarator_list parameter_list enumerator_list pointer struct_declaration_list struct_declarator_list specifier_qualifier_list
+%type   <expr>          expr expr_statement primary_expr postfix_expr unary_expr relational_expr additive_expr multiplicative_expr assignment_expr equality_expr and_expr exclusive_or_expr inclusive_or_expr logical_and_expr logical_or_expr conditional_expr constant_expr initializer cast_expr
 %type   <for_loop>      for_statement
 %type   <jump>          jump_statement
 %type   <labeled>       labeled_statement
 %type   <switch_statement> switch_statement
 %type   <while_loop>    while_statement
 %type   <selection>     selection_statement
+%type   <structure>     struct_or_union_specifier
 
 %%
 
@@ -114,11 +123,11 @@ declaration:
 
 declaration_specifiers:
                 type_specifier {
-                    $$ = g_list_append(NULL, GINT_TO_POINTER($1));
+                    $$ = g_list_append(NULL, $1);
                 }
         |
                 declaration_specifiers type_specifier {
-                    $$ = g_list_prepend($1, GINT_TO_POINTER($1));
+                    $$ = g_list_prepend($1, $2);
                 }
                 ;
 
@@ -161,6 +170,8 @@ initializer:
 
 declarator:
                 direct_declarator { $$ = $1; }
+        |
+                pointer direct_declarator { $$ = $2; }
                 ;
 
 direct_declarator:
@@ -189,6 +200,14 @@ direct_declarator:
                 }
                 ;
 
+pointer:
+                '*' { $$ = g_list_append(NULL, GINT_TO_POINTER('*')); }
+        |
+                '*' pointer { $$ = g_list_prepend($2, GINT_TO_POINTER('*')); }
+                ;
+
+
+
 /* declaration_specifier: */
 /*                 type ID { */
 /*                     struct Identifier *identifier = identifier_new($2, $1); */
@@ -197,11 +216,140 @@ direct_declarator:
 /*                 } */
 /*                 ; */
 
+// TODO: Add unions (I'm just adding structs for now)
+struct_or_union_specifier:
+                struct_or_union identifier '{' struct_declaration_list '}' {
+                    struct Struct *s = struct_new($2, $4);
+                    $$ = s;
+                }
+        |
+                struct_or_union '{' struct_declaration_list '}' {
+                    struct Struct *s = struct_new(NULL, $3);
+                    $$ = s;
+                }
+        |
+                struct_or_union identifier {
+                    struct Struct *s = struct_new($2, NULL);
+                    $$ = s;
+                }
+                ;
+
+struct_or_union:
+                STRUCT { $$ = $1; }
+        |
+                UNION { $$ = $1; }
+                ;
+
+struct_declaration_list:
+                struct_declaration {
+                    $$ = g_list_append(NULL, $1);
+                }
+        |
+                struct_declaration_list struct_declaration {
+                    $$ = g_list_append($1, $2);
+                }
+;
+
+struct_declaration:
+                specifier_qualifier_list struct_declarator_list ';' {
+                    $$ = declaration_new($1, $2);
+                }
+;
+
+specifier_qualifier_list:
+                type_specifier specifier_qualifier_list {
+                    $$ = g_list_prepend($2, $1);
+                }
+        |
+                type_specifier {
+                    $$ = g_list_prepend(NULL, $1);
+                }
+                ;
+
+struct_declarator_list:
+                struct_declarator {
+                    $$ = g_list_append(NULL, $1);
+                }
+        |
+                struct_declarator_list ',' struct_declarator {
+                    $$ = g_list_append($1, $3);
+                }
+                ;
+
+struct_declarator:
+                declarator { $$ = $1; }
+        /* | */
+                /* ':' constant_expression */
+        /* | */
+        /*         declarator ':' constant_expression */
+;
+
+
 
 type_specifier:
-                INT { $$ = $1; }
+                INT {
+                    $$ = type_new(TYPE_INT);
+                }
         |
-                VOID {$$ = $1; }
+                VOID {
+                    $$ = type_new(TYPE_VOID);
+                }
+        |
+                enum_specifier {
+                    struct Type *type = type_new(TYPE_ENUM);
+                    type->enumeration = $1;
+                    $$ = type;
+                }
+        |
+                struct_or_union_specifier {
+                    struct Type *type = type_new(TYPE_STRUCT);
+                    type->structure = $1;
+                    $$ = type;
+                }
+        /* | */
+                /* identifier { */
+                /*     struct Type *type = type_new(TYPE_USER_DEFINED); */
+                /*     type->identifier = $1; */
+                /*     $$ = type; */
+                /* } */
+        ;
+
+enum_specifier:
+                ENUM '{' enumerator_list '}' {
+                    struct Enum *e = enum_new(NULL, $3);
+                    $$ = e;
+                }
+        |
+                ENUM identifier '{' enumerator_list '}' {
+                    struct Enum *e = enum_new($2, $4);
+                    $$ = e;
+                }
+        |
+                ENUM identifier {
+                    struct Enum *e = enum_new($2, NULL);
+                    $$ = e;
+                }
+        ;
+
+enumerator_list:
+                enumerator {
+                    $$ = g_list_append(NULL, $1);
+                }
+        |
+                enumerator_list ',' enumerator {
+                    $$ = g_list_append($1, $3);
+                }
+        ;
+
+enumerator:
+                identifier {
+                    $$ = enum_element_new($1, NULL);
+                }
+        |
+                identifier '=' constant_expr {
+                    $$ = enum_element_new($1, $3);
+
+                }
         ;
 
 block:
@@ -455,6 +603,25 @@ postfix_expr:
 
 unary_expr:
                 postfix_expr { $$ = $1; }
+        |
+                unary_operator cast_expr {
+                    struct ExprOp *unop = expr_op_new($1, $2, NULL);
+                    struct Expr *expr = expr_new(EXPR_UNOP);
+                    expr->op = unop;
+                    $$ = expr;
+                }
+        ;
+
+unary_operator:
+                '&' { $$ = OP_ADDRESS; }
+        |
+                '*' { $$ = OP_DEREFERENCE; }
+        ;
+
+cast_expr:
+                unary_expr { $$ = $1; }
+        |
+                '(' type_specifier ')' cast_expr { $$ = $4; }
         ;
 
 multiplicative_expr:
@@ -550,9 +717,9 @@ constant_expr:
         ;
 
 assignment_expr:
-                equality_expr { $$ = $1; }
+               equality_expr { $$ = $1; }
         |
-                postfix_expr '=' assignment_expr {
+                unary_expr '=' assignment_expr {
                     struct Expr *postfix = $1;
                     struct ExprAssignment *assignment;
 
@@ -561,8 +728,10 @@ assignment_expr:
                     } else if (postfix->type == EXPR_IDENTIFIER) {
                         struct Identifier *identifier = postfix->id->id;
                         assignment = expr_assignment_new(LVALUE_IDENTIFIER, identifier, $3);
+                    } else if (postfix->type == EXPR_UNOP) {
+                        assignment = expr_assignment_new(LVALUE_POINTER, postfix->op, $3);
                     } else {
-                        log_err("Only Identifiers and indexed Expressions can appear on the LHS of an assignment, you tried to put type %d", postfix->type);
+                        log_err("Only Identifiers, dereferences, and indexed Expressions can appear on the LHS of an assignment, you tried to put type %d", postfix->type);
                         YYABORT;
                     }
                     struct Expr *expr = expr_new(EXPR_ASSIGNMENT);

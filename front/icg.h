@@ -38,6 +38,7 @@ struct Address {
         int value; // The value for a constant, or the param position for params
         char *name; // The label or variable name for labels, names, and temps
     };
+    GList *prefixes;
 };
 
 struct Quad {
@@ -65,6 +66,7 @@ struct Address *label_new();
 struct Address *label_from_identifier();
 struct Address *address_new(enum TACAddressType type);
 struct Address *address_temp_new();
+struct Address *address_from_identifier(struct Identifier *identifier);
 void address_print(struct Address *addr);
 void quad_print(struct Quad *quad);
 

@@ -22,11 +22,12 @@ void identifier_validate_declared(struct Identifier *identifier, struct SymbolTa
 void expr_assignment_build_symbol_table(struct ExprAssignment *assignment, struct SymbolTable *st) {
     switch (assignment->lvalue_type) {
     case LVALUE_IDENTIFIER: {
-        struct Identifier *identifier = (struct Identifier *)assignment->lhs;
-        struct Identifier **identifier_pointer = (struct Identifier **)&assignment->lhs;
-        identifier_validate_declared(identifier, st, identifier_pointer);
+        identifier_validate_declared((struct Identifier *)assignment->lhs, st, (struct Identifier **)&assignment->lhs);
         break;
     }
+    case LVALUE_POINTER:
+        expr_build_symbol_table(((struct ExprOp *)assignment->lhs)->arg1, st);
+        break;
     case LVALUE_INDEXED: {
         expr_indexed_build_symbol_table((struct ExprIndexed *)assignment->lhs, st);
         break;
@@ -55,10 +56,13 @@ void expr_build_symbol_table(struct Expr *expr, struct SymbolTable *st) {
     case (EXPR_CONSTANT):
         break;
     case (EXPR_IDENTIFIER):
-        identifier_validate_declared(expr->id->id, st, &expr->id->id);
+        identifier_validate_declared(expr->id->id, st, &(expr->id->id));
         break;
     case (EXPR_INDEXED):
         expr_indexed_build_symbol_table(expr->indexed, st);
+        break;
+    case (EXPR_UNOP):
+        expr_build_symbol_table(expr->op->arg1, st);
         break;
     case (EXPR_BINOP):
     case (EXPR_RELOP):
@@ -79,6 +83,22 @@ void statement_jump_build_symbol_table(struct StatementJump *jump, struct Symbol
         expr_build_symbol_table(jump->expr, st);
         break;
     }
+}
+
+void statement_labeled_build_symbol_table(struct StatementLabeled *labeled, struct SymbolTable *st) {
+    switch (labeled->type) {
+    case LABELED_CASE:
+        expr_build_symbol_table(labeled->test, st);
+        break;
+    case LABELED_DEFAULT:
+        break;
+    case LABELED_LABEL:
+        log_err("LABELED_LABEL case not yet correctly implemented in analysis");
+        break;
+    default:
+        log_err("Unknown StatementLabeled type received: %d", labeled->type);
+    }
+    statement_build_symbol_table(labeled->statement, st);
 }
 
 void statement_build_symbol_table(struct Statement *statement, struct SymbolTable *st) {
@@ -108,7 +128,7 @@ void statement_build_symbol_table(struct Statement *statement, struct SymbolTabl
         // TODO: Need to add the label to the symbol table, so we can confirm that all gotos are to
         // actualy labels. However, we'll have to do that check after we've walked the whole program,
         // since labels can be jumped to before they actually show up.
-        statement_build_symbol_table(statement->labeled->statement, st);
+        statement_labeled_build_symbol_table(statement->labeled, st);
         break;
     case (STMT_TYPE_SELECTION):
     {
@@ -184,7 +204,37 @@ void declarator_build_symbol_table(struct Declarator *declarator, struct SymbolT
     }
 }
 
+void enum_build_symbol_table(struct Enum *enumeration, struct SymbolTable *st) {
+    int next_value = 0;
+    GList *enumerators = enumeration->enumerators;
+    while (enumerators) {
+        struct EnumElement *elt = enumerators->data;
+        if (elt->expr) {
+            next_value = expr_eval_constant(elt->expr);
+        }
+        elt->value = next_value;
+        struct Constant *c = constant_new(next_value);
+        elt->identifier->constant = c;
+        symbol_table_extend(st, elt->identifier);
+        next_value++;
+        enumerators = enumerators->next;
+    }
+    return;
+}
+
+void specifiers_build_symbol_table(struct Type *type, struct SymbolTable *st) {
+    switch (type->type) {
+    case TYPE_ENUM:
+        enum_build_symbol_table(type->enumeration, st);
+        break;
+    default:
+        break;
+    }
+}
+
 void declaration_build_symbol_table(struct Declaration *declaration, struct SymbolTable *st) {
+    GList *specifiers = declaration->specifiers;
+    g_list_foreach(specifiers, (GFunc)specifiers_build_symbol_table, (gpointer *)st);
     GList *declarators = declaration->declarators;
     g_list_foreach(declarators, (GFunc)declarator_build_symbol_table, (gpointer *)st);
 }

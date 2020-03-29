@@ -27,6 +27,12 @@ tests = [
     ("indexed_lhs_simple", 1),
     ("array_simple", 40),
     ("array_arg", 40),
+    ("enum_simple", 5),
+    ("enum2", 6),
+    ("pointers_simple", 42),
+    ("pointers2", 23),
+    ("structs_local", 8),
+    ("structs_indirect", 8),
 ]
 testDir = "tests"
 testExtension = ".c"

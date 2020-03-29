@@ -177,20 +177,12 @@ class Environment:
         else:
             self.env = {}
 
-    def primitive_result(self, obj):
+    @staticmethod
+    def primitive_result(obj):
         return type(obj) == int or type(obj) == list
 
-    def lookup(self, key, recursive=True):
-        if not recursive:
-            return self.env.get(key)
-        else:
-            res = self.env.get(key)
-            if self.primitive_result(res):
-                return res
-            elif res is not None:
-                return self.lookup(res, recursive=recursive)
-            else:
-                return key
+    def lookup(self, key):
+        return self.env.get(key)
 
     def extend(self, key, value):
         new_env = copy.copy(self.env)
@@ -199,6 +191,17 @@ class Environment:
 
     def copy(self):
         return Environment(copy.deepcopy(self.env))
+
+    def print(self):
+        print(self.env)
+
+
+class Pointer:
+    def __init__(self, to):
+        self.to = to
+
+    def __str__(self):
+        return "*{}".format(self.to)
 
 
 class Interpreter:
@@ -229,6 +232,32 @@ class Interpreter:
     def label_index(self, label):
         primitive_label = self.env.lookup(label)
         return primitive_label
+
+    def eval_rhs(self, rhs):
+        if type(rhs) == int:
+            return rhs
+        elif type(rhs) == str:
+            if rhs[0] == "*":
+                lookup = self.env.lookup(rhs[1:])
+                return self.eval_rhs(lookup.to)
+            elif rhs[0] == '&':
+                return Pointer(rhs[1:])
+            else:
+                return self.env.lookup(rhs)
+        else:
+            raise Exception("Unknown type for rhs: {} (rhs = {})", type(rhs), rhs)
+
+    def eval_lhs(self, lhs):
+        if type(lhs) == str:
+            if lhs[0] == '*':
+                pointer = self.env.lookup(lhs[1:])
+                if type(pointer) != Pointer:
+                    raise Exception("Attempted to dereference a variable that wasn't a pointer: {}".format(lhs))
+                return pointer.to
+            else:
+                return lhs
+        else:
+            raise Exception("Illegal type for lhs: {} (lhs = {})", type(lhs), lhs)
 
     def _eval(self):
         while 0 <= self.next_index < len(self.quads):
@@ -264,14 +293,14 @@ class Interpreter:
                     param_value = self.cur_fn_params[quad.param_index]
                     self.env = self.env.extend(quad.lhs, param_value)
                 else:
-                    self.env = self.env.extend(quad.lhs, quad.rhs)
+                    self.env = self.env.extend(self.eval_lhs(quad.lhs), self.eval_rhs(quad.rhs))
                 self.next_index += 1
             elif quad.type == TAC_JUMP:
                 self.next_index = self.label_index(quad.target)
             elif quad.type == TAC_LINDEXED_COPY:
                 ls = self.env.lookup(quad.lhs)
                 index = self.env.lookup(quad.index)
-                rhs = self.env.lookup(quad.rhs)
+                rhs = self.eval_rhs(quad.rhs)
                 if ls and type(ls) == list:
                     if len(ls) <= index:
                         bigger_ls = [None for _ in range(index + 1)]
@@ -286,10 +315,10 @@ class Interpreter:
             elif quad.type == TAC_NO_OP:
                 self.next_index += 1
             elif quad.type == TAC_PARAM:
-                self.params.append(self.env.lookup(quad.address))
+                self.params.append(self.eval_rhs(quad.address))
                 self.next_index += 1
             elif quad.type == TAC_RETURN:
-                res = self.env.lookup(quad.address)
+                res = self.eval_rhs(quad.address)
                 self.return_value = res
                 if self.return_indexes:
                     return_value_var, self.next_index, self.env = self.return_indexes.pop()
@@ -297,8 +326,8 @@ class Interpreter:
                 else:
                     return res
             elif quad.type == TAC_RINDEXED_COPY:
-                ls = self.env.lookup(quad.rhs)
-                index = self.env.lookup(quad.index)
+                ls = self.eval_rhs(quad.rhs)
+                index = self.eval_rhs(quad.index)
                 self.env = self.env.extend(quad.lhs, ls[index])
                 self.next_index += 1
             else:
@@ -319,8 +348,8 @@ class Interpreter:
         return interp._eval()
 
     def apply_relop(self, op, arg1, arg2):
-        arg1 = self.env.lookup(arg1)
-        arg2 = self.env.lookup(arg2)
+        arg1 = self.eval_rhs(arg1)
+        arg2 = self.eval_rhs(arg2)
 
         if op == ">":
             return arg1 > arg2
@@ -336,8 +365,8 @@ class Interpreter:
             raise Exception("Unknown relop: {}".format(op))
 
     def apply_binop(self, op, arg1, arg2):
-        arg1 = self.env.lookup(arg1)
-        arg2 = self.env.lookup(arg2)
+        arg1 = self.eval_rhs(arg1)
+        arg2 = self.eval_rhs(arg2)
 
         if op == "+":
             return arg1 + arg2

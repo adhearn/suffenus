@@ -20,6 +20,8 @@ enum Op {
     /* Op_mod, */
     /* Op_lshift, */
     /* Op_rshift, */
+    OP_DEREFERENCE,
+    OP_ADDRESS,
 };
 
 // Bigger than necessary, but good enough
@@ -34,21 +36,6 @@ enum NodeType {
     NODE_TYPE_BLOCK,
     NODE_TYPE_FUNCTION,
     NODE_TYPE_PROGRAM,
-};
-
-struct Type {
-    char *type;
-};
-
-struct Identifier {
-    enum NodeType node_type;
-    char *id;
-    struct Type *type;
-};
-
-struct Constant {
-    enum NodeType node_type;
-    int val;
 };
 
 enum StorageClassSpecifier {
@@ -74,16 +61,55 @@ enum TypeSpecifier {
     TYPE_STRUCT,
     TYPE_UNION,
     TYPE_ENUM,
-    TYPE_TYPEDEF
+    TYPE_TYPEDEF,
+    TYPE_USER_DEFINED,
+};
+
+struct Type {
+    enum TypeSpecifier type;
+    union {
+        struct Enum *enumeration;
+        struct Struct *structure;
+        struct TypeDef *type_definition;
+        struct Identifier *identifier;
+    };
+};
+
+struct Enum {
+    struct Identifier *identifier;
+    GList *enumerators;
+};
+
+struct EnumElement {
+    struct Identifier *identifier;
+    struct Expr *expr;
+    int value;
+};
+
+struct Struct {
+    struct Identifier *identifier;
+    GList *declarations;
+};
+
+struct TypeDef {
+    struct Identifier *identifier;
+};
+
+struct Identifier {
+    enum NodeType node_type;
+    char *id;
+    struct Type *type;
+    struct Constant *constant;
+};
+
+struct Constant {
+    enum NodeType node_type;
+    int val;
 };
 
 struct StructUnionSpecifier {
     enum TypeSpecifier struct_or_union; // Should only be TYPE_STRUCT or TYPE_UNION
     GList *declarations;
-};
-
-struct EnumSpecifier {
-    GList *enumerators;
 };
 
 enum TypeQualifier {
@@ -123,16 +149,18 @@ enum ExprType {
     EXPR_IDENTIFIER,
     EXPR_INDEXED,
     EXPR_RELOP,
+    EXPR_UNOP,
 };
 
 enum LValueType {
     LVALUE_IDENTIFIER,
     LVALUE_INDEXED,
+    LVALUE_POINTER,
 };
 
 struct ExprAssignment {
     enum LValueType lvalue_type;
-    void *lhs; // Should be either an identifier or an ExprIndexed
+    void *lhs; // Should be either an Identifier,  ExprIndexed, or ExprOp (with the op '*', aka OP_DEREFERENCE)
     struct Expr *rhs;
 };
 
@@ -275,8 +303,7 @@ struct Program {
 
 
 enum NodeType ast_node_type(void *ast_node);
-struct Type *type_new(char *type);
-void type_make_fn_type(struct Type *type);
+struct Type *type_new(enum TypeSpecifier type);
 
 struct Identifier *identifier_new(char *id, struct Type *type);
 void identifier_free(struct Identifier *identifier);
@@ -292,6 +319,10 @@ struct Declaration *declaration_new(GList *specifiers, GList *declarators);
 void declaration_free(struct Declaration *declaration);
 // void declaration_print(struct Declaration *declaration);
 
+struct Enum *enum_new(struct Identifier *identifier, GList *enumerators);
+struct EnumElement *enum_element_new(struct Identifier *identifier, struct Expr *expr);
+
+struct Struct *struct_new(struct Identifier *identifier, GList *declarations);
 
 struct ExprAssignment *expr_assignment_new(enum LValueType lvalue_type, void *lhs, struct Expr *rhs);
 struct ExprCall *expr_call_new(struct Expr *function, GList *args);
@@ -301,6 +332,7 @@ struct ExprIndexed *expr_indexed_new(struct Expr *expr, struct Expr *index);
 struct ExprOp *expr_op_new(enum Op op, struct Expr *arg1, struct Expr *arg2);
 struct Expr *expr_new(enum ExprType type);
 void expr_indexed_free(struct ExprIndexed *indexed);
+int expr_eval_constant(struct Expr *expr);
 void expr_free(struct Expr *expr);
 
 struct StatementFor *statement_for_new(struct Expr *init, struct Expr *test, struct Expr *update, struct Statement *body);

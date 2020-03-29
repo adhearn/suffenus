@@ -28,6 +28,8 @@
 "switch" { return SWITCH; }
 "case" { return CASE; }
 "default" { return DEFAULT; }
+"enum" { return ENUM; }
+"struct" { return STRUCT; }
 "int" { return INT; }
 "void" { return VOID; }
 
@@ -36,6 +38,7 @@
 "-" { return yytext[0]; }
 "*" { return yytext[0]; }
 "/" { return yytext[0]; }
+"&" { return yytext[0]; }
 
 "==" { yylval.op = Op_eq; return EQOP; }
 "!=" { yylval.op = Op_neq; return EQOP; }
@@ -46,7 +49,7 @@
 
 [0-9]+ { yylval.integer = atoi(yytext); return INTEGER;}
 [[:alpha:]]([[:alnum:]_])* { yylval.str = strdup(yytext);  return ID; }
-[\n]+ { /* return NEWLINE; */ }
+[\n]+ { yylineno++; }
 [ \t]+ { /* ignore whitespace */ }
 . { printf("bad input character: '%s' at line %d\n", yytext, yylineno); }
 %%

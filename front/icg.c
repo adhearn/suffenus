@@ -45,6 +45,19 @@ struct Address *address_new(enum TACAddressType type) {
     return addr;
 }
 
+struct Address *address_from_identifier(struct Identifier *identifier) {
+    struct Address *addr;
+    if (identifier->constant) {
+        addr = address_new(ADDR_TYPE_CONSTANT);
+        addr->value = identifier->constant->val;
+
+    } else {
+        addr = address_new(ADDR_TYPE_NAME);
+        addr->name = identifier->id;
+    }
+    return addr;
+}
+
 struct Address *address_temp_new() {
     struct Address *addr = address_new(ADDR_TYPE_TEMP);
     addr->name = tmp_var_new("TMP");
@@ -58,6 +71,12 @@ struct Address *address_zero_new() {
 }
 
 void address_print(struct Address *addr) {
+    GList *prefixes = addr->prefixes;
+    while(prefixes) {
+        printf("%c", GPOINTER_TO_INT(prefixes->data));
+        prefixes = prefixes->next;
+    }
+
     switch(addr->type) {
     case (ADDR_TYPE_LABEL):
     case (ADDR_TYPE_NAME):
@@ -105,7 +124,7 @@ void quad_print(struct Quad *quad) {
     case (TAC_UNOP):
         address_print(quad->result);
         printf(" = ");
-        printf(" %s ", OP_NAMES[quad->op]);
+        printf(" %s", OP_NAMES[quad->op]);
         address_print(quad->arg1);
         break;
     case (TAC_BINOP):
@@ -177,8 +196,7 @@ void quad_print(struct Quad *quad) {
 
 struct Quad *expr_assignment_identifier_generate_tac_quads_rvalue(struct Identifier *lhs, struct Expr *rhs) {
     struct Quad *final_expr = expr_generate_tac_quads_rvalue(rhs);
-    struct Address *addr = address_new(ADDR_TYPE_NAME);
-    addr->name = lhs->id;
+    struct Address *addr = address_from_identifier(lhs);
 
     if (final_expr->instruction == TAC_COPY && final_expr->result->type == ADDR_TYPE_TEMP) {
         // Small optimization: if the final expr from above is a copy to a temp, we can instead
@@ -200,8 +218,7 @@ struct Address *index_base(struct ExprIndexed *indexed) {
     struct Address *addr;
     switch (indexed->expr->type) {
     case (EXPR_IDENTIFIER):
-        addr = address_new(ADDR_TYPE_NAME);
-        addr->name = indexed->expr->id->id->id;
+        addr = address_from_identifier(indexed->expr->id->id);
         break;
     default:
         log_err("Invalid base expression type for indexed expression: %d", indexed->expr->type);
@@ -230,6 +247,48 @@ struct Quad *expr_assignment_indexed_generate_tac_quads_rvalue(struct ExprIndexe
     return copy;
 }
 
+
+struct Quad *expr_assignment_pointer_generate_tac_quads_rvalue(struct ExprOp *unop, struct Expr *rhs) {
+    // Generate quads for the RHS, then modify the result of the final quad to be our indexed operation
+    struct Quad *rhs_result = expr_generate_tac_quads_rvalue(rhs);
+    struct Identifier *identifier;
+
+    GList *identifier_modifiers = NULL;
+
+    while(unop) {
+        struct Expr *expr;
+        if (unop->op != OP_DEREFERENCE) {
+            log_err("Received invalid op: %d", unop->op);
+            break;
+        } else {
+            identifier_modifiers = g_list_prepend(identifier_modifiers, GINT_TO_POINTER('*'));
+            expr = unop->arg1;
+        }
+
+        switch (expr->type) {
+        case EXPR_IDENTIFIER: {
+            identifier = expr->id->id;
+            unop = NULL;
+            break;
+        }
+        case EXPR_UNOP: {
+            unop = expr->op;
+        }
+        default: {
+            log_err("Received invalid expr type: %d", expr->type);
+            expr = NULL;
+            break;
+        }
+        }
+    }
+
+    struct Address *pointer_lhs = address_from_identifier(identifier);
+    pointer_lhs->prefixes = identifier_modifiers;
+    rhs_result->result = pointer_lhs;
+
+    return rhs_result;
+}
+
 struct Quad *expr_assignment_generate_tac_quads_rvalue(struct ExprAssignment *assignment) {
     struct Quad *quad;
     switch (assignment->lvalue_type) {
@@ -238,6 +297,9 @@ struct Quad *expr_assignment_generate_tac_quads_rvalue(struct ExprAssignment *as
         break;
     case LVALUE_INDEXED:
         quad = expr_assignment_indexed_generate_tac_quads_rvalue((struct ExprIndexed *)assignment->lhs, assignment->rhs);
+        break;
+    case LVALUE_POINTER:
+        quad = expr_assignment_pointer_generate_tac_quads_rvalue((struct ExprOp *)assignment->lhs, assignment->rhs);
         break;
     }
     return quad;
@@ -296,8 +358,7 @@ struct Quad *expr_constant_generate_tac_quads_rvalue(struct ExprConstant* consta
 }
 
 struct Quad *expr_identifier_generate_tac_quads_rvalue(struct ExprIdentifier *id) {
-    struct Address *rhs = address_new(ADDR_TYPE_NAME);
-    rhs->name = id->id->id;
+    struct Address *rhs = address_from_identifier(id->id);
     struct Address *lhs = address_temp_new();
     struct Quad *quad = quad_new(TAC_COPY);
     quad->result = lhs;
@@ -318,15 +379,48 @@ struct Quad *expr_indexed_generate_tac_quads_rvalue(struct ExprIndexed *indexed)
     return quad;
 }
 
-struct Quad *expr_op_generate_tac_quads_rvalue(struct ExprOp *op) {
-    struct Quad *quad1 = expr_generate_tac_quads_rvalue(op->arg1);
-    struct Quad *quad2 = expr_generate_tac_quads_rvalue(op->arg2);
+struct Quad *expr_binop_generate_tac_quads_rvalue(struct ExprOp *op) {
+    struct Address *arg1, *arg2;
+
+    if (op->arg1->type == EXPR_IDENTIFIER) {
+        arg1 = address_from_identifier(op->arg1->id->id);
+    } else {
+        struct Quad *quad1 = expr_generate_tac_quads_rvalue(op->arg1);
+        arg1 = quad1->result;
+    }
+
+    if (op->arg2->type == EXPR_IDENTIFIER) {
+        arg2 = address_from_identifier(op->arg2->id->id);
+    } else {
+        struct Quad *quad2 = expr_generate_tac_quads_rvalue(op->arg2);
+        arg2 = quad2->result;
+    }
+
     // We could try to optimize this here if these are both copies. However, a later optimization
     // pass can also handle it. For now, keep things simple.
     struct Address *result_addr = address_temp_new();
     struct Quad *quad = quad_new(TAC_BINOP);
-    quad->arg1 = quad1->result;
-    quad->arg2 = quad2->result;
+    quad->arg1 = arg1;
+    quad->arg2 = arg2;
+    quad->result = result_addr;
+    quad->op = op->op;
+    extend_quads(quad);
+    return quad;
+}
+
+struct Quad *expr_unop_generate_tac_quads_rvalue(struct ExprOp *op) {
+    struct Address *arg1;
+
+    if (op->arg1->type == EXPR_IDENTIFIER) {
+        arg1 = address_from_identifier(op->arg1->id->id);
+    } else {
+        struct Quad *quad1 = expr_generate_tac_quads_rvalue(op->arg1);
+        arg1 = quad1->result;
+    }
+
+    struct Address *result_addr = address_temp_new();
+    struct Quad *quad = quad_new(TAC_UNOP);
+    quad->arg1 = arg1;
     quad->result = result_addr;
     quad->op = op->op;
     extend_quads(quad);
@@ -353,7 +447,10 @@ struct Quad *expr_generate_tac_quads_rvalue(struct Expr *expr) {
         break;
     case (EXPR_BINOP):
     case (EXPR_RELOP):
-        quad = expr_op_generate_tac_quads_rvalue(expr->op);
+        quad = expr_binop_generate_tac_quads_rvalue(expr->op);
+        break;
+    case (EXPR_UNOP):
+        quad = expr_unop_generate_tac_quads_rvalue(expr->op);
         break;
     }
     return quad;
@@ -389,8 +486,7 @@ struct Quad *expr_assignment_generate_tac_quads_jump(struct ExprAssignment *assi
 }
 
 struct Quad *expr_identifier_generate_tac_quads_jump(struct ExprIdentifier *identifier, struct Address *true_label, struct Address *false_label, struct Address *next_label) {
-    struct Address *identifier_address = address_new(ADDR_TYPE_NAME);
-    identifier_address->name = identifier->id->id;
+    struct Address *identifier_address = address_from_identifier(identifier->id);
     return address_generate_conditional_jump(identifier_address, true_label, false_label);
 }
 
@@ -405,7 +501,12 @@ struct Quad *expr_call_generate_tac_quads_jump(struct ExprCall *call, struct Add
 }
 
 struct Quad *expr_binop_generate_tac_quads_jump(struct ExprOp *op, struct Address *true_label, struct Address *false_label, struct Address *next_label) {
-    struct Quad *quad = expr_op_generate_tac_quads_rvalue(op);
+    struct Quad *quad = expr_binop_generate_tac_quads_rvalue(op);
+    return address_generate_conditional_jump(quad->result, true_label, false_label);
+}
+
+struct Quad *expr_unop_generate_tac_quads_jump(struct ExprOp *op, struct Address *true_label, struct Address *false_label, struct Address *next_label) {
+    struct Quad *quad = expr_unop_generate_tac_quads_rvalue(op);
     return address_generate_conditional_jump(quad->result, true_label, false_label);
 }
 
@@ -445,6 +546,9 @@ struct Quad *expr_generate_tac_quads_jump(struct Expr *expr, struct Address *tru
     case (EXPR_BINOP):
         quad = expr_binop_generate_tac_quads_jump(expr->op, true_label, false_label, next_label);
         break;
+    case (EXPR_UNOP):
+        quad = expr_unop_generate_tac_quads_jump(expr->op, true_label, false_label, next_label);
+        break;
     case (EXPR_RELOP):
         quad = expr_relop_generate_tac_quads_jump(expr->op, true_label, false_label, next_label);
         break;
@@ -458,13 +562,17 @@ struct Quad *declarator_generate_tac_quads(struct Declarator *decl) {
         switch (decl->type) {
         case DECLARATOR_IDENTIFIER: {
             struct Quad *init = expr_generate_tac_quads_rvalue(decl->initializer);
-            struct Quad *copy = quad_new(TAC_COPY);
-            struct Address *addr = address_new(ADDR_TYPE_NAME);
-            addr->name = declarator_identifier(decl)->id;
-            copy->result = addr;
-            copy->arg1 = init->result;
-            extend_quads(copy);
-            quad = copy;
+            if (init->instruction == TAC_COPY && init->result->type == ADDR_TYPE_TEMP) {
+                init->result = address_from_identifier(declarator_identifier(decl));
+                quad = init;
+            } else {
+                struct Quad *copy = quad_new(TAC_COPY);
+                struct Address *addr = address_from_identifier(declarator_identifier(decl));
+                copy->result = addr;
+                copy->arg1 = init->result;
+                extend_quads(copy);
+                quad = copy;
+            }
         }
         case DECLARATOR_FUNCTION:
         case DECLARATOR_ARRAY:
@@ -476,7 +584,6 @@ struct Quad *declarator_generate_tac_quads(struct Declarator *decl) {
 }
 
 struct Quad *declaration_generate_tac_quads(struct Declaration *decl) {
-    // We only care about initializers here
     struct Quad *quad;
     GList *declarators = decl->declarators;
     while (declarators) {
@@ -570,9 +677,16 @@ struct Quad *statement_jump_generate_tac_quads(struct StatementJump *jump, struc
         extend_quads(quad);
         break;
     case JUMP_RETURN: {
-        struct Quad *quad_expr = expr_generate_tac_quads_rvalue(jump->expr);
+        struct Address *return_addr;
+        if (jump->expr->type == EXPR_IDENTIFIER) {
+            return_addr = address_from_identifier(jump->expr->id->id);
+        } else {
+            struct Quad *quad_expr = expr_generate_tac_quads_rvalue(jump->expr);
+            return_addr = quad_expr->result;
+        }
+
         struct Quad *quad_return = quad_new(TAC_RETURN);
-        quad_return->result = quad_expr->result;
+        quad_return->result = return_addr;
         extend_quads(quad_return);
         quad = quad_return;
     }
@@ -841,8 +955,7 @@ struct Quad *function_generate_tac_quads(struct Function *func) {
         // param declarations can only have a single declarator, so we're safe to just access the first one
         struct Declarator *declarator = g_list_first(param_declaration->declarators)->data;
         struct Identifier *identifier = declarator_identifier(declarator);
-        struct Address *arg_addr = address_new(ADDR_TYPE_NAME);
-        arg_addr->name = identifier->id;
+        struct Address *arg_addr = address_from_identifier(identifier);
 
         // Create Address for the param itself
         struct Address *param_addr = address_new(ADDR_TYPE_FUNC_PARAM);

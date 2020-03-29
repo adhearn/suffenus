@@ -16,9 +16,9 @@ enum NodeType ast_node_type(void *ast_node) {
 }
 
 // Reverse lookup for op names, useful for printing
-char *OP_NAMES[] = { "+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">=" };
+char *OP_NAMES[] = { "+", "-", "*", "/", "==", "!=", "<", ">", "<=", ">=", "*", "&"};
 
-struct Type *type_new(char *type) {
+struct Type *type_new(enum TypeSpecifier type) {
     struct Type *t = malloc(sizeof(struct Type));
     check_mem(t);
     t->type = type;
@@ -26,13 +26,8 @@ struct Type *type_new(char *type) {
 }
 
 void type_free(struct Type *type) {
-    free(type->type);
     free(type);
 }
-
-/* void type_print(struct Type *type) { */
-/*     printf("%s", type->type); */
-/* } */
 
 struct Identifier *identifier_new(char *id, struct Type *type) {
     struct Identifier *identifier = malloc(sizeof(struct Identifier));
@@ -48,10 +43,6 @@ void identifier_free(struct Identifier *id) {
     free(id);
 }
 
-/* void identifier_print(struct Identifier *id) { */
-/*     printf("%s", id->id); */
-/* } */
-
 struct Constant *constant_new(int constant) {
     struct Constant *c = malloc(sizeof(struct Identifier));
     check_mem(c);
@@ -63,10 +54,6 @@ struct Constant *constant_new(int constant) {
 void constant_free(struct Constant *c) {
     free(c);
 }
-
-/* void constant_print(struct Constant *c) { */
-/*     printf("%d", c->val); */
-/* } */
 
 struct Declarator *declarator_new(enum DeclaratorType type, struct Declarator *sub_declarator, void *other) {
     struct Declarator *declarator = malloc(sizeof(struct Declarator));
@@ -107,9 +94,29 @@ void declaration_free(struct Declaration *decl) {
     free(decl);
 }
 
-/* void declaration_print(struct Declaration *decl) { */
-/*     printf("Declaration: %s %s\n", decl->type->type, decl->id->id); */
-/* } */
+struct Enum *enum_new(struct Identifier *identifier, GList *enumerators) {
+    struct Enum *e = malloc(sizeof(struct Enum));
+    check_mem(e);
+    e->identifier = identifier;
+    e->enumerators = enumerators;
+    return e;
+}
+
+struct EnumElement *enum_element_new(struct Identifier *identifier, struct Expr *expr) {
+    struct EnumElement *elt = malloc(sizeof(struct EnumElement));
+    check_mem(elt);
+    elt->identifier = identifier;
+    elt->expr = expr;
+    return elt;
+}
+
+struct Struct *struct_new(struct Identifier *identifier, GList *declarations) {
+    struct Struct *s = malloc(sizeof(struct Struct));
+    check_mem(s);
+    s->identifier = identifier;
+    s->declarations = declarations;
+    return s;
+}
 
 struct ExprAssignment *expr_assignment_new(enum LValueType type, void *lhs, struct Expr *rhs) {
     struct ExprAssignment *assignment = malloc(sizeof(struct ExprAssignment));
@@ -127,6 +134,10 @@ void expr_assignment_free(struct ExprAssignment *assignment) {
         break;
     case LVALUE_INDEXED:
         expr_indexed_free((struct ExprIndexed *)assignment->lhs);
+        break;
+    case LVALUE_POINTER:
+        expr_indexed_free((struct ExprIndexed *)assignment->lhs);
+        // TODO: Free the GList too (I'm in a hurry, so not doing it now)
         break;
     }
     expr_free(assignment->rhs);
@@ -196,7 +207,9 @@ struct ExprOp *expr_op_new(enum Op op, struct Expr *arg1, struct Expr *arg2) {
 
 void expr_op_free(struct ExprOp *expr) {
     free(expr->arg1);
-    free(expr->arg2);
+    if (expr->arg2) {
+        free(expr->arg2);
+    }
     free(expr);
 }
 
@@ -228,6 +241,7 @@ void expr_free(struct Expr *expr) {
         break;
     case (EXPR_BINOP):
     case (EXPR_RELOP):
+    case (EXPR_UNOP):
         expr_op_free(expr->op);
         break;
     }
@@ -235,47 +249,42 @@ void expr_free(struct Expr *expr) {
     free(expr);
 }
 
-/* void expr_print(struct Expr *expr) { */
-/*     switch (expr->type) { */
-/*     case (EXPR_CONSTANT): */
-/*         constant_print(expr->constant->constant); */
-/*         break; */
-/*     case (EXPR_IDENTIFIER): */
-/*         identifier_print(expr->id->id); */
-/*         break; */
-/*     case (EXPR_OP): */
-/*         expr_print(expr->op->arg1); */
-/*         printf(" %s ", OP_NAMES[expr->op->op]); */
-/*         expr_print(expr->op->arg2); */
-/*         break; */
-/*     } */
-/* } */
-
-/* struct Statement_assignment *assignment_new(struct Identifier *id, struct Expr *expr) { */
-/*     struct Statement_assignment  *assignment = malloc(sizeof(struct Statement_assignment)); */
-/*     check_mem(assignment); */
-/*     assignment->id = id; */
-/*     assignment->expr = expr; */
-/*     return assignment; */
-/* } */
-
-/* void statement_assignment_free(struct Statement_assignment *assignment) { */
-/*     identifier_free(assignment->id); */
-/*     expr_free(assignment->expr); */
-/*     free(assignment); */
-/* } */
-
-/* struct Statement_return *return_new(struct Expr *expr) { */
-/*     struct Statement_return *ret = malloc(sizeof(struct Statement_return)); */
-/*     check_mem(ret); */
-/*     ret->expr = expr; */
-/*     return ret; */
-/* } */
-
-/* void statement_return_free(struct Statement_return *ret) { */
-/*     expr_free(ret->expr); */
-/*     free(ret); */
-/* } */
+// NOTE: This will return bad answers if given a non-constant expr.
+// The obvious solution is to use a loop-based DFS, but that's so inelegant - eval *wants* to be recursive.
+// I could also use pointers to pass in a solution, then return an error code, or use a global, or ...
+// plenty of options, but this is good enough for now.
+int expr_eval_constant(struct Expr *expr) {
+    switch(expr->type) {
+    case EXPR_BINOP: {
+        int lhs = expr_eval_constant(expr->op->arg1);
+        int rhs = expr_eval_constant(expr->op->arg2);
+        switch (expr->op->op) {
+        case Op_add:
+            return lhs + rhs;
+        case Op_sub:
+            return lhs - rhs;
+        case Op_mul:
+            return lhs * rhs;
+        case Op_div:
+            return lhs / rhs;
+        default:
+            log_err("Attempted to constant eval an expression wiht a bad op: %d", expr->op->op);
+        }
+        break;
+    }
+    case EXPR_CONSTANT:
+        return expr->constant->constant->val;
+        break;
+    case EXPR_ASSIGNMENT:
+    case EXPR_CALL:
+    case EXPR_IDENTIFIER:
+    case EXPR_INDEXED:
+    case EXPR_RELOP:
+    case EXPR_UNOP:
+        log_err("Attempted to evaluate a non-constant expr");
+    }
+    return -1;
+}
 
 struct StatementFor *statement_for_new(struct Expr *init, struct Expr *test, struct Expr *update, struct Statement *body) {
     struct StatementFor *loop = malloc(sizeof(struct StatementFor));
@@ -419,20 +428,6 @@ void statement_free(struct Statement *stmt) {
     free(stmt);
 }
 
-/* void statement_print(struct Statement *stmt) { */
-/*     switch(stmt->type) { */
-/*     case STMT_ASSIGN: */
-/*         printf("Assignment: %s = ", stmt->assignment->id->id); */
-/*         expr_print(stmt->assignment->expr); */
-/*         break; */
-/*     case STMT_RETURN: */
-/*         printf("Return: "); */
-/*         expr_print(stmt->ret->expr); */
-/*         break; */
-/*     } */
-/*     printf("\n"); */
-/* } */
-
 struct Block *block_new(GList *block_elements, struct SymbolTable *st) {
     struct Block *block = malloc(sizeof(struct Block));
     check_mem(block);
@@ -468,32 +463,9 @@ void block_element_free(void *elt) {
     }
 }
 
-/* void block_element_print(void *elt) { */
-/*     // Hack: the node_type is first in all of our structs, so it doesn't matter which union field we use */
-/*     // to access the node_type - it's always in the same spot (namely, offset 0) */
-/*     enum Node_type node_type = ast_node_type(elt); */
-/*     switch (node_type) { */
-/*     case NODE_TYPE_FUNCTION: */
-/*         function_print((struct Function *)elt); */
-/*         break; */
-/*     case NODE_TYPE_DECLARATION: */
-/*         declaration_print((struct Declaration *)elt); */
-/*         break; */
-/*     case NODE_TYPE_STATEMENT: */
-/*         statement_print((struct Statement*) elt); */
-/*         break; */
-/*     default: */
-/*         log_err("Received invalid node type in block_element_print: %d", node_type); */
-/*     } */
-/* } */
-
 void block_free(struct Block *block) {
     g_list_free_full(block->block_elements, (GDestroyNotify)block_element_free);
 }
-
-/* void block_print(struct Block *block) { */
-/*     g_list_foreach(block->block_elements, (GFunc)block_element_print, NULL); */
-/* } */
 
 struct Function *function_new(struct Declarator *declarator, struct Block *body, GList *specifiers) {
     if (declarator->type != DECLARATOR_FUNCTION) {
@@ -519,13 +491,6 @@ void function_free(struct Function *func) {
     free(func);
 }
 
-/* void function_print(struct Function *func) { */
-/*     printf("Function:\nName: %s\nReturn Type: %s\nParams:", func->name->id, func->return_type->type); */
-/*     g_list_foreach(func->param_declarations, (GFunc)declaration_print, NULL); */
-/*     printf("Body:\n"); */
-/*     block_print(func->body); */
-/* } */
-
 struct Program *program_new(struct Block *block) {
     struct Program *prog = malloc(sizeof(struct Program));
     check_mem(prog);
@@ -539,11 +504,6 @@ void program_free(struct Program *prog) {
     block_free(prog->top_level_block);
     free(prog);
 }
-
-/* void program_print(struct Program *prog) { */
-/*     printf("Program:\n"); */
-/*     block_print(prog->top_level_block); */
-/* } */
 
 struct SymbolTable *symbol_table_new(struct SymbolTable* parent) {
     struct SymbolTable *st = malloc(sizeof(struct SymbolTable));
